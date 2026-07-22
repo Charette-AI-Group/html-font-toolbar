@@ -132,9 +132,123 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         }
     }
 
+    // If an explicit selection covers PART of a single flat span, split that
+    // span into sibling spans (before / selection / after) and apply the
+    // change only to the middle piece. Each piece is itself a flat span or
+    // plain text — never nested. Returns false when not applicable so the
+    // caller falls back to whole-span merging.
+    splitApply(ed, mutate) {
+        const from = ed.getCursor('from');
+        const to = ed.getCursor('to');
+        if (from.line !== to.line || from.ch === to.ch) return false;
+        const text = ed.getLine(from.line);
+        const tok = /<span\b[^>]*>|<\/span>/g;
+        let m;
+        let depth = 0;
+        let start = -1;
+        let openTag = '';
+        while ((m = tok.exec(text)) !== null) {
+            if (m[0][1] === '/') {
+                depth--;
+                if (depth === 0 && start >= 0) {
+                    const end = m.index + m[0].length;
+                    if (from.ch >= start && to.ch <= end) {
+                        return this.splitSpan(ed, from, to, text, start, end, openTag, mutate);
+                    }
+                    start = -1;
+                }
+                if (depth < 0) depth = 0;
+            } else {
+                if (depth === 0) { start = m.index; openTag = m[0]; }
+                depth++;
+            }
+        }
+        return false;
+    }
+
+    splitSpan(ed, from, to, text, start, end, openTag, mutate) {
+        const sm = openTag.match(/^<span style="([^"]*)">$/i);
+        if (!sm) return false;
+        const innerStart = start + openTag.length;
+        const innerEnd = end - '</span>'.length;
+        // Only split when the selection is a strict subset of the span's text
+        // and the span is flat (no nested spans inside); otherwise fall back
+        // to the whole-span merge path, which also repairs nesting
+        if (from.ch < innerStart || to.ch > innerEnd) return false;
+        if (from.ch === innerStart && to.ch === innerEnd) return false;
+        if (/<\/?span/i.test(text.slice(innerStart, innerEnd))) return false;
+
+        const parseProps = (s) => {
+            const p = {};
+            s.split(';').forEach((pair) => {
+                const i = pair.indexOf(':');
+                if (i > 0) p[pair.slice(0, i).trim()] = pair.slice(i + 1).trim();
+            });
+            return p;
+        };
+        const parentProps = parseProps(sm[1]);
+        const midProps = Object.assign({}, parentProps);
+        mutate(midProps);
+
+        const styleOf = (p) => Object.entries(p).map(([k, v]) => k + ':' + v).join('; ');
+        const wrap = (t, p) => {
+            if (!t) return '';
+            const s = styleOf(p);
+            return s ? '<span style="' + s + '">' + t + '</span>' : t;
+        };
+        const same = Object.keys(parentProps).length === Object.keys(midProps).length &&
+            Object.keys(parentProps).every((k) => parentProps[k] === midProps[k]);
+
+        const before = text.slice(innerStart, from.ch);
+        const mid = text.slice(from.ch, to.ch);
+        const after = text.slice(to.ch, innerEnd);
+        let out;
+        let midFrom;
+        let midTo;
+        if (same) {
+            // No net change vs the parent (e.g. toggled back): keep one span
+            out = wrap(before + mid + after, parentProps);
+            midFrom = 0;
+            midTo = out.length;
+        } else {
+            const b = wrap(before, parentProps);
+            const mw = wrap(mid, midProps);
+            out = b + mw + wrap(after, parentProps);
+            midFrom = b.length;
+            midTo = b.length + mw.length;
+        }
+        ed.replaceRange(out, { line: from.line, ch: start }, { line: from.line, ch: end });
+        // Select the middle piece so the next button press keeps working on it
+        ed.setSelection({ line: from.line, ch: start + midFrom }, { line: from.line, ch: start + midTo });
+        ed.focus();
+        return true;
+    }
+
+    // If the text right before/after the current selection is a span with the
+    // exact same style, extend the selection over it and return its inner
+    // text, so the output merges into one span instead of leaving identical
+    // siblings side by side (e.g. after a split is styled back to match).
+    absorbSiblings(ed, styleStr) {
+        const from = ed.getCursor('from');
+        const to = ed.getCursor('to');
+        if (from.line !== to.line) return { before: '', after: '' };
+        const esc = styleStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const lt = ed.getLine(from.line);
+        const bm = lt.slice(0, from.ch).match(new RegExp('<span style="' + esc + '">([^<]*)</span>$'));
+        const am = lt.slice(to.ch).match(new RegExp('^<span style="' + esc + '">([^<]*)</span>'));
+        if (bm || am) {
+            ed.setSelection(
+                { line: from.line, ch: from.ch - (bm ? bm[0].length : 0) },
+                { line: to.line, ch: to.ch + (am ? am[0].length : 0) }
+            );
+        }
+        return { before: bm ? bm[1] : '', after: am ? am[1] : '' };
+    }
+
     transformSpan(mutate) {
         const ed = this.getEditor();
         if (!ed) { new Notice('Open a note in editing mode first'); return; }
+        if (this.splitApply(ed, mutate)) return;
         this.expandToSpan(ed);
         const sel = ed.getSelection();
         if (!sel) { new Notice('Select some text first'); return; }
@@ -158,7 +272,14 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         mutate(props);
 
         const styleStr = Object.entries(props).map(([k, v]) => k + ':' + v).join('; ');
-        const out = styleStr ? '<span style="' + styleStr + '">' + inner + '</span>' : inner;
+        let out;
+        if (styleStr) {
+            const extra = this.absorbSiblings(ed, styleStr);
+            inner = extra.before + inner + extra.after;
+            out = '<span style="' + styleStr + '">' + inner + '</span>';
+        } else {
+            out = inner;
+        }
 
         const start = ed.posToOffset(ed.getCursor('from'));
         ed.replaceSelection(out);
@@ -293,6 +414,10 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
     clearFormatting() {
         const ed = this.getEditor();
         if (!ed) { new Notice('Open a note in editing mode first'); return; }
+        // A partial selection inside a span clears just that piece via a split
+        if (this.splitApply(ed, (props) => {
+            for (const k of Object.keys(props)) delete props[k];
+        })) return;
         this.expandToSpan(ed);
         const sel = ed.getSelection();
         if (!sel) { new Notice('Select some text first'); return; }

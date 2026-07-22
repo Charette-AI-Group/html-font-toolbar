@@ -27,7 +27,8 @@ Because the output is plain inline HTML, notes render identically even if the pl
   - in a paragraph: aligns the paragraph
   - in a table with just a cursor: sets markdown's native *column* alignment (`:---:`)
   - in a table with a selection: aligns just that fragment inside the cell
-- **Clear formatting** — strips all HTML from the selection; click inside a styled word is enough
+- **Partial restyling** — select a word inside an already-styled sentence and style (or un-style) just that word: the span splits into clean sibling spans, still never nested, and re-merges when pieces become identical again
+- **Clear formatting** — strips all HTML from the selection; click inside a styled word is enough, or select part of a styled run to clear just that part
 - **Cursor-friendly** — after the first styling, clicking anywhere inside a styled word is enough to restyle it; no re-selecting
 - **Fully customizable** — a settings tab lets you add, rename, recolor, or remove every preset (text colors, highlights, sizes, fonts), with one-click restore of the defaults
 - Toolbar toggles via ribbon icon, command palette, or assignable hotkey; groups wrap responsively without splitting
