@@ -96,3 +96,18 @@
     font-size: 12px;
     padding: 0 4px;
 }
+
+/* Settings tab: preset rows are name + value + (picker) + delete */
+.hft-setting-row .setting-item-info {
+    display: none;
+}
+
+.hft-setting-row .setting-item-control {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+}
+
+.hft-setting-row input.hft-setting-value {
+    flex-grow: 1;
+    font-family: var(--font-monospace);
+}

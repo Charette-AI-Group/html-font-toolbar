@@ -1,48 +1,48 @@
 'use strict';
 
-const { Plugin, Notice, MarkdownView, setIcon } = require('obsidian');
+const { Plugin, PluginSettingTab, Setting, Notice, MarkdownView, setIcon, debounce } = require('obsidian');
 
-// Text colors chosen to stay readable on both light and dark themes
-const TEXT_COLORS = [
-    ['Red', '#e0313a'],
-    ['Orange', '#f76707'],
-    ['Gold', '#b58900'],
-    ['Green', '#2f9e44'],
-    ['Blue', '#1c7ed6'],
-    ['Purple', '#9c36b5'],
-];
-
-// Semi-transparent highlights: work in light AND dark theme without forcing a text color
-const HIGHLIGHTS = [
-    ['Yellow', 'rgba(255, 213, 0, 0.4)'],
-    ['Green', 'rgba(64, 192, 87, 0.35)'],
-    ['Blue', 'rgba(51, 154, 240, 0.35)'],
-    ['Pink', 'rgba(246, 89, 171, 0.35)'],
-    ['Orange', 'rgba(255, 146, 43, 0.4)'],
-    ['Purple', 'rgba(151, 117, 250, 0.35)'],
-];
-
-const SIZES = [
-    ['Small', '0.85em'],
-    ['Normal', null],
-    ['Large', '1.25em'],
-    ['XL', '1.6em'],
-    ['XXL', '2em'],
-];
-
-const FONTS = [
-    ['Default', null],
-    ['Serif', 'Georgia, serif'],
-    ['Mono', 'Consolas, monospace'],
-    ['Hand', "'Segoe Script', 'Comic Sans MS', cursive"],
-];
+const DEFAULT_SETTINGS = {
+    visible: true,
+    customText: '#e0313a',
+    customHighlight: '#ffd500',
+    // Text colors chosen to stay readable on both light and dark themes
+    textColors: [
+        { name: 'Red', value: '#e0313a' },
+        { name: 'Orange', value: '#f76707' },
+        { name: 'Gold', value: '#b58900' },
+        { name: 'Green', value: '#2f9e44' },
+        { name: 'Blue', value: '#1c7ed6' },
+        { name: 'Purple', value: '#9c36b5' },
+    ],
+    // Semi-transparent highlights: work in light AND dark theme without forcing a text color
+    highlights: [
+        { name: 'Yellow', value: 'rgba(255, 213, 0, 0.4)' },
+        { name: 'Green', value: 'rgba(64, 192, 87, 0.35)' },
+        { name: 'Blue', value: 'rgba(51, 154, 240, 0.35)' },
+        { name: 'Pink', value: 'rgba(246, 89, 171, 0.35)' },
+        { name: 'Orange', value: 'rgba(255, 146, 43, 0.4)' },
+        { name: 'Purple', value: 'rgba(151, 117, 250, 0.35)' },
+    ],
+    // Empty value = remove the property (back to normal size / default font)
+    sizes: [
+        { name: 'Small', value: '0.85em' },
+        { name: 'Normal', value: '' },
+        { name: 'Large', value: '1.25em' },
+        { name: 'XL', value: '1.6em' },
+        { name: 'XXL', value: '2em' },
+    ],
+    fonts: [
+        { name: 'Default', value: '' },
+        { name: 'Serif', value: 'Georgia, serif' },
+        { name: 'Mono', value: 'Consolas, monospace' },
+        { name: 'Hand', value: "'Segoe Script', 'Comic Sans MS', cursive" },
+    ],
+};
 
 module.exports = class HtmlFontToolbarPlugin extends Plugin {
     async onload() {
-        this.settings = Object.assign(
-            { visible: true, customText: '#e0313a', customHighlight: '#ffd500' },
-            await this.loadData()
-        );
+        await this.loadSettings();
         this.app.workspace.onLayoutReady(() => this.buildToolbar());
         this.addRibbonIcon('palette', 'Toggle HTML font toolbar', () => this.toggleToolbar());
         this.addCommand({
@@ -50,16 +50,33 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
             name: 'Toggle toolbar',
             callback: () => this.toggleToolbar(),
         });
+        this.addSettingTab(new HtmlFontToolbarSettingTab(this.app, this));
+        // Rebuild is cheap (a few dozen nodes) but debounced so typing in the
+        // settings tab doesn't thrash the DOM on every keystroke.
+        this.requestRebuild = debounce(() => this.rebuildToolbar(), 400, true);
     }
 
     onunload() {
         if (this.toolbar) this.toolbar.remove();
     }
 
+    async loadSettings() {
+        this.settings = Object.assign({}, structuredClone(DEFAULT_SETTINGS), await this.loadData());
+    }
+
+    async saveSettings() {
+        await this.saveData(this.settings);
+    }
+
     toggleToolbar() {
         this.settings.visible = !this.settings.visible;
-        this.saveData(this.settings);
+        this.saveSettings();
         if (this.toolbar) this.toolbar.style.display = this.settings.visible ? '' : 'none';
+    }
+
+    rebuildToolbar() {
+        if (this.toolbar) this.toolbar.remove();
+        this.buildToolbar();
     }
 
     // ---------- core: read selection, mutate span properties, write back ----------
@@ -324,7 +341,7 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
             inp.value = this.settings[key];
             inp.addEventListener('change', () => {
                 this.settings[key] = inp.value;
-                this.saveData(this.settings);
+                this.saveSettings();
                 paint();
                 this.applyStyle(prop, inp.value);
             });
@@ -346,10 +363,10 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
             ph.disabled = true;
             ph.selected = true;
             sel.add(ph);
-            items.forEach(([label], idx) => sel.add(new Option(label, String(idx))));
+            items.forEach((item, idx) => sel.add(new Option(item.name, String(idx))));
             sel.addEventListener('change', () => {
                 const idx = Number(sel.value);
-                this.applyStyle(prop, items[idx][1]);
+                this.applyStyle(prop, items[idx].value || null);
                 sel.selectedIndex = 0;
             });
             group.appendChild(sel);
@@ -357,7 +374,7 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
 
         // Text colors
         let g = mkGroup();
-        for (const [name, value] of TEXT_COLORS) {
+        for (const { name, value } of this.settings.textColors) {
             const b = mkBtn(g, 'Text color: ' + name, () => this.applyStyle('color', value), 'hft-a');
             b.textContent = 'A';
             b.style.color = value;
@@ -366,7 +383,7 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
 
         // Highlights
         g = mkGroup();
-        for (const [name, value] of HIGHLIGHTS) {
+        for (const { name, value } of this.settings.highlights) {
             const b = mkBtn(g, 'Highlight: ' + name, () => this.applyStyle('background-color', value), 'hft-swatch');
             b.style.backgroundColor = value;
         }
@@ -387,8 +404,8 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
 
         // Size + font dropdowns
         g = mkGroup();
-        mkSelect(g, 'Size', SIZES, 'font-size');
-        mkSelect(g, 'Font', FONTS, 'font-family');
+        mkSelect(g, 'Size', this.settings.sizes, 'font-size');
+        mkSelect(g, 'Font', this.settings.fonts, 'font-family');
 
         // Clear formatting + hide toolbar
         g = mkGroup();
@@ -401,3 +418,132 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         if (!this.settings.visible) bar.style.display = 'none';
     }
 };
+
+class HtmlFontToolbarSettingTab extends PluginSettingTab {
+    constructor(app, plugin) {
+        super(app, plugin);
+        this.plugin = plugin;
+    }
+
+    save() {
+        this.plugin.saveSettings();
+        this.plugin.requestRebuild();
+    }
+
+    display() {
+        const { containerEl } = this;
+        containerEl.empty();
+
+        new Setting(containerEl)
+            .setName('Show toolbar')
+            .setDesc('The palette ribbon icon and the "Toggle toolbar" command toggle this too.')
+            .addToggle((t) => t
+                .setValue(this.plugin.settings.visible)
+                .onChange((v) => {
+                    if (v !== this.plugin.settings.visible) this.plugin.toggleToolbar();
+                }));
+
+        this.listSection({
+            key: 'textColors',
+            heading: 'Text colors',
+            desc: 'Preset text-color buttons shown on the toolbar.',
+            picker: true,
+            valuePlaceholder: '#e0313a',
+            addItem: () => ({ name: 'Color', value: '#e0313a' }),
+        });
+
+        this.listSection({
+            key: 'highlights',
+            heading: 'Highlights',
+            desc: 'Preset highlight swatches. Any CSS color works; semi-transparent rgba() colors stay readable in both light and dark themes.',
+            picker: true,
+            valuePlaceholder: 'rgba(255, 213, 0, 0.4)',
+            addItem: () => ({ name: 'Highlight', value: 'rgba(255, 213, 0, 0.4)' }),
+        });
+
+        this.listSection({
+            key: 'sizes',
+            heading: 'Font sizes',
+            desc: 'Entries in the Size dropdown. Relative em units scale with the theme (e.g. 1.25em). Leave the value empty to make an entry that resets to normal size.',
+            valuePlaceholder: '1.25em',
+            addItem: () => ({ name: 'Size', value: '1.25em' }),
+        });
+
+        this.listSection({
+            key: 'fonts',
+            heading: 'Fonts',
+            desc: 'Entries in the Font dropdown. The value is a CSS font-family list (e.g. Georgia, serif). Leave the value empty to make an entry that resets to the default font.',
+            valuePlaceholder: 'Georgia, serif',
+            addItem: () => ({ name: 'Font', value: 'Georgia, serif' }),
+        });
+    }
+
+    listSection({ key, heading, desc, picker, valuePlaceholder, addItem }) {
+        const { containerEl } = this;
+        const items = this.plugin.settings[key];
+
+        new Setting(containerEl)
+            .setName(heading)
+            .setDesc(desc)
+            .setHeading()
+            .addExtraButton((b) => b
+                .setIcon('rotate-ccw')
+                .setTooltip('Restore default ' + heading.toLowerCase())
+                .onClick(() => {
+                    this.plugin.settings[key] = structuredClone(DEFAULT_SETTINGS[key]);
+                    this.save();
+                    this.display();
+                }));
+
+        items.forEach((item, idx) => {
+            const row = new Setting(containerEl);
+            row.settingEl.addClass('hft-setting-row');
+            row.addText((t) => t
+                .setPlaceholder('Name')
+                .setValue(item.name)
+                .onChange((v) => {
+                    item.name = v;
+                    this.save();
+                }));
+            let valueText;
+            row.addText((t) => {
+                valueText = t;
+                t.setPlaceholder(valuePlaceholder)
+                    .setValue(item.value)
+                    .onChange((v) => {
+                        item.value = v.trim();
+                        this.save();
+                    });
+                t.inputEl.addClass('hft-setting-value');
+            });
+            if (picker) {
+                // The picker only speaks hex; it writes into the text field so
+                // rgba() values typed by hand are still allowed.
+                row.addColorPicker((c) => c
+                    .setValue(/^#[0-9a-f]{6}$/i.test(item.value) ? item.value : '#000000')
+                    .onChange((v) => {
+                        item.value = v;
+                        valueText.setValue(v);
+                        this.save();
+                    }));
+            }
+            row.addExtraButton((b) => b
+                .setIcon('trash-2')
+                .setTooltip('Remove')
+                .onClick(() => {
+                    items.splice(idx, 1);
+                    this.save();
+                    this.display();
+                }));
+        });
+
+        new Setting(containerEl)
+            .addButton((b) => b
+                .setButtonText('Add')
+                .onClick(() => {
+                    items.push(addItem());
+                    this.save();
+                    this.display();
+                }));
+    }
+}

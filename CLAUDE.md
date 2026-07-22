@@ -13,12 +13,12 @@ Floating toolbar that styles selected text with inline HTML spans (color, highli
 ## Business decisions (already made)
 - Author: **Charette AI Group** (legal: Charette AI Group, LLC), site https://charette-ai-group.github.io/web/
 - Funding: PayPal `https://www.paypal.com/donate/?hosted_button_id=FEM4WLD7LHY36` (same button as saeCalculator project)
-- GitHub: account FrancoisCharette, repo to be created under the **Charette AI Group org** (not yet created/pushed — needs user go-ahead)
-- Name: "HTML Font Toolbar" (id `html-font-toolbar`) is the working name; user is considering alternatives (Span Styler / Font Painter / Inline Palette). Name + id + repo name must be final before submission. Plugin name must not contain "Obsidian".
+- GitHub: account FrancoisCharette, repo `Charette-AI-Group/html-font-toolbar` (created 2026-07-21)
+- Name: **FINAL — "HTML Font Toolbar"** (id `html-font-toolbar`), confirmed by user 2026-07-21.
 
 ## Remaining roadmap (in order)
-1. Settings tab (customizable color presets, fonts, sizes) — expected by reviewers
-2. Create GitHub repo under org + push (ask user first; outward-facing)
+1. ~~Settings tab~~ — done in 1.7.0 (customizable text colors, highlights, sizes, fonts; restore-defaults per section)
+2. ~~Create GitHub repo under org + push~~ — done 2026-07-21
 3. Screenshots/GIF for README
 4. Mobile check (toolbar vs on-screen keyboard) or set `isDesktopOnly: true` for v1
 5. Detail page as the "third card" on the company website (repo `web` under the org): benefits, instructions, screenshots, donation button
