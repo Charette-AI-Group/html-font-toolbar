@@ -36,6 +36,8 @@ Because the output is plain inline HTML, notes render identically even if the pl
 
 Every preset on the toolbar is editable in the plugin's settings tab: rename, recolor, remove, or add text colors, highlights, font sizes, and fonts. Each section has a one-click restore-defaults button. Changes apply to the toolbar immediately.
 
+Color values accept any CSS color — hex like `#ffd500` or `rgba(255, 213, 0, 0.4)`, where the fourth rgba number is opacity (0 = transparent, 1 = opaque). The two formats are interchangeable: `#ffd500` is `rgba(255, 213, 0, 1)` with the three channels written in hex. As a rule of thumb, use opaque hex for text colors (semi-transparent text looks washed out) and semi-transparent rgba for highlights (so they stay readable in both light and dark themes).
+
 ![The settings tab with editable preset lists for text colors and highlights](docs/toolbarSettings.png)
 
 ## Installation

@@ -471,7 +471,7 @@ class HtmlFontToolbarSettingTab extends PluginSettingTab {
         this.listSection({
             key: 'textColors',
             heading: 'Text colors',
-            desc: 'Preset text-color buttons shown on the toolbar.',
+            desc: 'Preset text-color buttons shown on the toolbar. Values can be hex (#e0313a) or rgba(); for text, fully opaque hex is usually the most readable.',
             picker: true,
             valuePlaceholder: '#e0313a',
             addItem: () => ({ name: 'Color', value: '#e0313a' }),
@@ -480,7 +480,7 @@ class HtmlFontToolbarSettingTab extends PluginSettingTab {
         this.listSection({
             key: 'highlights',
             heading: 'Highlights',
-            desc: 'Preset highlight swatches. Any CSS color works; semi-transparent rgba() colors stay readable in both light and dark themes.',
+            desc: 'Preset highlight swatches. Values can be hex or rgba(); the fourth rgba() number is opacity (0 to 1), and semi-transparent colors (around 0.35) stay readable in both light and dark themes.',
             picker: true,
             valuePlaceholder: 'rgba(255, 213, 0, 0.4)',
             addItem: () => ({ name: 'Highlight', value: 'rgba(255, 213, 0, 0.4)' }),
