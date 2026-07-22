@@ -16,6 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Run tests
+        run: |
+          node --check main.js
+          node --test "tests/*.test.js"
+
       - name: Attest release assets
         uses: actions/attest-build-provenance@v2
         with:
