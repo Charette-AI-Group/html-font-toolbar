@@ -71,7 +71,7 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
     toggleToolbar() {
         this.settings.visible = !this.settings.visible;
         this.saveSettings();
-        if (this.toolbar) this.toolbar.style.display = this.settings.visible ? '' : 'none';
+        if (this.toolbar) this.toolbar.classList.toggle('hft-hidden', !this.settings.visible);
     }
 
     rebuildToolbar() {
@@ -415,7 +415,7 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         close.textContent = '×';
 
         document.body.appendChild(bar);
-        if (!this.settings.visible) bar.style.display = 'none';
+        if (!this.settings.visible) bar.classList.add('hft-hidden');
     }
 };
 
