@@ -426,6 +426,16 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         g = mkGroup();
         const clear = mkBtn(g, 'Clear all formatting (strip HTML tags)', () => this.clearFormatting());
         setIcon(clear, 'eraser');
+        // app.setting is undocumented API: guard so the button degrades to a
+        // no-op if a future Obsidian version changes it
+        const gear = mkBtn(g, 'Plugin settings', () => {
+            const s = this.app.setting;
+            if (s && typeof s.open === 'function' && typeof s.openTabById === 'function') {
+                s.open();
+                s.openTabById(this.manifest.id);
+            }
+        });
+        setIcon(gear, 'settings');
         const close = mkBtn(g, 'Hide toolbar (palette icon in the left ribbon brings it back)', () => this.toggleToolbar());
         close.textContent = '×';
 
