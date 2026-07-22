@@ -40,6 +40,21 @@ const DEFAULT_SETTINGS = {
     ],
 };
 
+// Parse #rgb / #rrggbb / rgb() / rgba() into { hex, alpha } so the settings
+// color picker (hex-only) can preview and edit semi-transparent values.
+function parseCssColor(value) {
+    let m = /^#([0-9a-f]{6})$/i.exec(value);
+    if (m) return { hex: '#' + m[1].toLowerCase(), alpha: 1 };
+    m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(value);
+    if (m) return { hex: ('#' + m[1] + m[1] + m[2] + m[2] + m[3] + m[3]).toLowerCase(), alpha: 1 };
+    m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(value);
+    if (m) {
+        const h = (n) => Math.max(0, Math.min(255, Number(n))).toString(16).padStart(2, '0');
+        return { hex: '#' + h(m[1]) + h(m[2]) + h(m[3]), alpha: m[4] === undefined ? 1 : Number(m[4]) };
+    }
+    return null;
+}
+
 module.exports = class HtmlFontToolbarPlugin extends Plugin {
     async onload() {
         await this.loadSettings();
@@ -517,13 +532,23 @@ class HtmlFontToolbarSettingTab extends PluginSettingTab {
                 t.inputEl.addClass('hft-setting-value');
             });
             if (picker) {
-                // The picker only speaks hex; it writes into the text field so
-                // rgba() values typed by hand are still allowed.
+                // The picker only speaks opaque hex. Preview rgba() values by
+                // their rgb part; on change, keep the value's original alpha so
+                // semi-transparent highlights stay semi-transparent.
+                const parsed = parseCssColor(item.value);
                 row.addColorPicker((c) => c
-                    .setValue(/^#[0-9a-f]{6}$/i.test(item.value) ? item.value : '#000000')
+                    .setValue(parsed ? parsed.hex : '#000000')
                     .onChange((v) => {
-                        item.value = v;
-                        valueText.setValue(v);
+                        const cur = parseCssColor(item.value);
+                        if (cur && cur.alpha < 1) {
+                            const r = parseInt(v.slice(1, 3), 16);
+                            const g = parseInt(v.slice(3, 5), 16);
+                            const b = parseInt(v.slice(5, 7), 16);
+                            item.value = 'rgba(' + r + ', ' + g + ', ' + b + ', ' + cur.alpha + ')';
+                        } else {
+                            item.value = v;
+                        }
+                        valueText.setValue(item.value);
                         this.save();
                     }));
             }
