@@ -2,6 +2,8 @@
 
 An Obsidian plugin that gives you a floating, Word-like formatting toolbar — but with a twist that makes it different from every other formatting plugin: **everything it produces is one clean inline HTML span**.
 
+![The floating toolbar over a note, with color, highlight, style, alignment, size, and font controls](docs/toolbarOn.png)
+
 ## Why another formatting plugin?
 
 Markdown formatting (`**bold**`, `==highlight==`) and HTML styling (`<span style="color:red">`) don't nest predictably. Mix plugins that use different syntaxes and you get conflicts: a highlight that locks the font color, bold that can't be colored, nested tags that break each other.
@@ -30,6 +32,12 @@ Because the output is plain inline HTML, notes render identically even if the pl
 - **Fully customizable** — a settings tab lets you add, rename, recolor, or remove every preset (text colors, highlights, sizes, fonts), with one-click restore of the defaults
 - Toolbar toggles via ribbon icon, command palette, or assignable hotkey; groups wrap responsively without splitting
 
+## Customization
+
+Every preset on the toolbar is editable in the plugin's settings tab: rename, recolor, remove, or add text colors, highlights, font sizes, and fonts. Each section has a one-click restore-defaults button. Changes apply to the toolbar immediately.
+
+![The settings tab with editable preset lists for text colors and highlights](docs/toolbarSettings.png)
+
 ## Installation
 
 **From Obsidian (once accepted in the community directory):** Settings → Community plugins → Browse → "HTML Font Toolbar".
@@ -39,6 +47,8 @@ Because the output is plain inline HTML, notes render identically even if the pl
 ## Usage
 
 1. Click the palette icon in the left ribbon (or run "Toggle toolbar") to show/hide the toolbar.
+
+   ![The palette icon in the left ribbon toggles the toolbar](docs/toolbarOff.png)
 2. Select text (or click inside an already-styled word) and press a button.
 3. Stack as many properties as you like — they merge into a single span.
 4. The eraser button removes all styling from the selection or the styled word under the cursor.
