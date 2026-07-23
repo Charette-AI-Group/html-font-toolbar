@@ -195,6 +195,16 @@ test('toggling the only style off an aligned line restores the bare div', () => 
     assert.equal(ed.getValue(), '<div style="text-align:center">hello</div>');
 });
 
+test('restyling legacy span-around-div content repairs the tag order', () => {
+    const line = '<span style="font-weight:bold"><div style="text-align:center">hello</div></span>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
+    makePlugin(ed).applyStyle('color', '#e0313a');
+    assert.equal(
+        ed.getValue(),
+        '<div style="text-align:center"><span style="font-weight:bold; color:#e0313a">hello</span></div>'
+    );
+});
+
 test('paragraph alignment wraps and left-align unwraps', () => {
     const ed = new MockEditor('hello', { line: 0, ch: 2 });
     const p = makePlugin(ed);

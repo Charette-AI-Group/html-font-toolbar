@@ -278,6 +278,17 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
                 });
             }
             inner = inner.replace(/<\/?span[^>]*>/g, '');
+            // Repair legacy span-around-div content: after stripping the span
+            // layers an alignment wrapper may surface — peel it off too so it
+            // gets rebuilt on the outside
+            if (!prefix) {
+                const dm2 = inner.match(/^(<(?:div|p) style="text-align:(?:left|center|right)">)([\s\S]*)(<\/(?:div|p)>)$/i);
+                if (dm2) {
+                    prefix = dm2[1];
+                    inner = dm2[2];
+                    suffix = dm2[3];
+                }
+            }
         }
 
         mutate(props);
