@@ -254,19 +254,30 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         if (!sel) { new Notice('Select some text first'); return; }
 
         let inner = sel;
+        let prefix = '';
+        let suffix = '';
+        // An alignment wrapper (div/p from setAlignment) must stay OUTSIDE the
+        // span: a block tag inside an inline span is invalid HTML and breaks
+        // rendering. Peel it off, style the contents, re-wrap at the end.
+        const dm = inner.match(/^(<(?:div|p) style="text-align:(?:left|center|right)">)([\s\S]*)(<\/(?:div|p)>)$/i);
+        if (dm) {
+            prefix = dm[1];
+            inner = dm[2];
+            suffix = dm[3];
+        }
         const props = {};
         // Collect properties from EVERY span layer in the selection (inner layers win),
         // then strip all span tags — this merges, and also repairs nested spans.
-        if (/<span/i.test(sel)) {
+        if (/<span/i.test(inner)) {
             const tagRe = /<span style="([^"]*)">/g;
             let t;
-            while ((t = tagRe.exec(sel)) !== null) {
+            while ((t = tagRe.exec(inner)) !== null) {
                 t[1].split(';').forEach((pair) => {
                     const i = pair.indexOf(':');
                     if (i > 0) props[pair.slice(0, i).trim()] = pair.slice(i + 1).trim();
                 });
             }
-            inner = sel.replace(/<\/?span[^>]*>/g, '');
+            inner = inner.replace(/<\/?span[^>]*>/g, '');
         }
 
         mutate(props);
@@ -274,11 +285,15 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         const styleStr = Object.entries(props).map(([k, v]) => k + ':' + v).join('; ');
         let out;
         if (styleStr) {
-            const extra = this.absorbSiblings(ed, styleStr);
-            inner = extra.before + inner + extra.after;
-            out = '<span style="' + styleStr + '">' + inner + '</span>';
+            // Sibling absorption only applies to bare spans: neighbors of an
+            // alignment wrapper live outside it and must not be pulled in
+            if (!prefix) {
+                const extra = this.absorbSiblings(ed, styleStr);
+                inner = extra.before + inner + extra.after;
+            }
+            out = prefix + '<span style="' + styleStr + '">' + inner + '</span>' + suffix;
         } else {
-            out = inner;
+            out = prefix + inner + suffix;
         }
 
         const start = ed.posToOffset(ed.getCursor('from'));

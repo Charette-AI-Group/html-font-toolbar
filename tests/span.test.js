@@ -168,6 +168,33 @@ test('toggling an inherited style off a word un-bolds just that word', () => {
     );
 });
 
+test('styling a fully selected aligned line keeps the div outside the span', () => {
+    const line = '<div style="text-align:center">hello</div>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
+    makePlugin(ed).applyStyle('background-color', 'rgba(255, 213, 0, 0.4)');
+    assert.equal(
+        ed.getValue(),
+        '<div style="text-align:center"><span style="background-color:rgba(255, 213, 0, 0.4)">hello</span></div>'
+    );
+});
+
+test('styling an aligned styled line merges into the span inside the div', () => {
+    const line = '<div style="text-align:center"><span style="font-weight:bold">hello</span></div>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
+    makePlugin(ed).applyStyle('color', '#e0313a');
+    assert.equal(
+        ed.getValue(),
+        '<div style="text-align:center"><span style="font-weight:bold; color:#e0313a">hello</span></div>'
+    );
+});
+
+test('toggling the only style off an aligned line restores the bare div', () => {
+    const line = '<div style="text-align:center"><span style="font-weight:bold">hello</span></div>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
+    makePlugin(ed).toggleStyle('font-weight', 'bold');
+    assert.equal(ed.getValue(), '<div style="text-align:center">hello</div>');
+});
+
 test('paragraph alignment wraps and left-align unwraps', () => {
     const ed = new MockEditor('hello', { line: 0, ch: 2 });
     const p = makePlugin(ed);
