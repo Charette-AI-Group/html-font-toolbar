@@ -132,94 +132,167 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         }
     }
 
-    // If an explicit selection covers PART of a single flat span, split that
-    // span into sibling spans (before / selection / after) and apply the
-    // change only to the middle piece. Each piece is itself a flat span or
-    // plain text — never nested. Returns false when not applicable so the
-    // caller falls back to whole-span merging.
-    splitApply(ed, mutate) {
-        const from = ed.getCursor('from');
-        const to = ed.getCursor('to');
-        if (from.line !== to.line || from.ch === to.ch) return false;
-        const text = ed.getLine(from.line);
+    // Wrap text in a styled span, keeping markdown links and embeds OUTSIDE
+    // the span: link syntax inside inline HTML stops rendering as a link, so
+    // the output alternates spans and bare links instead.
+    wrapStyled(text, styleStr) {
+        if (!styleStr) return text;
+        const linkRe = /!?\[\[[^\]]*\]\]|!?\[[^\]]*\]\([^)]*\)/g;
+        let out = '';
+        let last = 0;
+        let m;
+        while ((m = linkRe.exec(text)) !== null) {
+            if (m.index > last) out += '<span style="' + styleStr + '">' + text.slice(last, m.index) + '</span>';
+            out += m[0];
+            last = m.index + m[0].length;
+        }
+        if (last < text.length) out += '<span style="' + styleStr + '">' + text.slice(last) + '</span>';
+        return out;
+    }
+
+    // Live Preview does not render a span/div that closes at the very end of
+    // the note until another character follows it — add a trailing newline.
+    padDocEnd(ed, line) {
+        if (line !== ed.lineCount() - 1) return;
+        const text = ed.getLine(line);
+        if (/<\/(?:span|div|p)>\s*$/.test(text)) {
+            ed.replaceRange('\n', { line, ch: text.length }, { line, ch: text.length });
+        }
+    }
+
+    parseStyleProps(s) {
+        const p = {};
+        s.split(';').forEach((pair) => {
+            const i = pair.indexOf(':');
+            if (i > 0) p[pair.slice(0, i).trim()] = pair.slice(i + 1).trim();
+        });
+        return p;
+    }
+
+    // Tokenize a stretch of text into runs: plain text and top-level flat
+    // spans. Returns null when the markup is nested or unbalanced, so callers
+    // fall back to the whole-span repair path.
+    parseRuns(text) {
+        const runs = [];
         const tok = /<span\b[^>]*>|<\/span>/g;
         let m;
         let depth = 0;
-        let start = -1;
+        let spanStart = -1;
         let openTag = '';
+        let plain = 0;
         while ((m = tok.exec(text)) !== null) {
             if (m[0][1] === '/') {
                 depth--;
-                if (depth === 0 && start >= 0) {
-                    const end = m.index + m[0].length;
-                    if (from.ch >= start && to.ch <= end) {
-                        return this.splitSpan(ed, from, to, text, start, end, openTag, mutate);
-                    }
-                    start = -1;
+                if (depth < 0) return null;
+                if (depth === 0) {
+                    const sm = openTag.match(/^<span style="([^"]*)">$/i);
+                    if (!sm) return null;
+                    runs.push({
+                        span: true,
+                        start: spanStart,
+                        end: m.index + m[0].length,
+                        innerStart: spanStart + openTag.length,
+                        innerEnd: m.index,
+                        props: this.parseStyleProps(sm[1]),
+                    });
+                    plain = m.index + m[0].length;
                 }
-                if (depth < 0) depth = 0;
             } else {
-                if (depth === 0) { start = m.index; openTag = m[0]; }
+                if (depth > 0) return null; // nested spans: repair path instead
+                if (m.index > plain) runs.push({ span: false, start: plain, end: m.index, props: {} });
+                spanStart = m.index;
+                openTag = m[0];
                 depth++;
             }
         }
-        return false;
+        if (depth !== 0) return null;
+        if (text.length > plain) runs.push({ span: false, start: plain, end: text.length, props: {} });
+        return runs;
     }
 
-    splitSpan(ed, from, to, text, start, end, openTag, mutate) {
-        const sm = openTag.match(/^<span style="([^"]*)">$/i);
-        if (!sm) return false;
-        const innerStart = start + openTag.length;
-        const innerEnd = end - '</span>'.length;
-        // Only split when the selection is a strict subset of the span's text
-        // and the span is flat (no nested spans inside); otherwise fall back
-        // to the whole-span merge path, which also repairs nesting
-        if (from.ch < innerStart || to.ch > innerEnd) return false;
-        if (from.ch === innerStart && to.ch === innerEnd) return false;
-        if (/<\/?span/i.test(text.slice(innerStart, innerEnd))) return false;
+    // Apply `mutate` to exactly the selected stretch of a line, preserving the
+    // distinct styles of every span it touches. Handles selections inside a
+    // span, across span boundaries, and over plain text in one pass, emitting
+    // flat sibling spans (splitting and re-merging as needed). Returns false
+    // when the shape is unsupported (no selection, multi-line, nested spans,
+    // embedded block tags) so the caller can fall back.
+    styleRange(ed, mutate) {
+        const from = ed.getCursor('from');
+        const to = ed.getCursor('to');
+        if (from.line !== to.line || from.ch === to.ch) return false;
+        const line = from.line;
+        const text = ed.getLine(line);
+        let regionStart = 0;
+        let prefix = '';
+        let suffix = '';
+        const dm = text.match(/^(<(?:div|p) style="text-align:(?:left|center|right)">)([\s\S]*)(<\/(?:div|p)>)$/i);
+        if (dm) {
+            prefix = dm[1];
+            suffix = dm[3];
+            regionStart = prefix.length;
+        }
+        const region = dm ? dm[2] : text;
+        if (/<(?:div|p)\b/i.test(region)) return false; // block tags inside: repair path
+        const runs = this.parseRuns(region);
+        if (!runs) return false;
+        const a = Math.max(from.ch - regionStart, 0);
+        const b = Math.min(to.ch - regionStart, region.length);
+        if (a >= b) return false;
 
-        const parseProps = (s) => {
-            const p = {};
-            s.split(';').forEach((pair) => {
-                const i = pair.indexOf(':');
-                if (i > 0) p[pair.slice(0, i).trim()] = pair.slice(i + 1).trim();
-            });
-            return p;
+        // Cut every run into outside/inside pieces relative to the selection
+        const pieces = [];
+        const push = (t, props, inSel) => { if (t) pieces.push({ t, props, inSel }); };
+        for (const r of runs) {
+            const cs = r.span ? r.innerStart : r.start;
+            const ce = r.span ? r.innerEnd : r.end;
+            const s = Math.min(Math.max(a, cs), ce);
+            const e = Math.max(Math.min(b, ce), cs);
+            if (s >= e) {
+                push(region.slice(cs, ce), Object.assign({}, r.props), false);
+                continue;
+            }
+            push(region.slice(cs, s), Object.assign({}, r.props), false);
+            const mp = Object.assign({}, r.props);
+            mutate(mp);
+            push(region.slice(s, e), mp, true);
+            push(region.slice(e, ce), Object.assign({}, r.props), false);
+        }
+
+        // Re-merge neighbors that ended up with identical styles
+        const same = (x, y) => {
+            const kx = Object.keys(x);
+            const ky = Object.keys(y);
+            return kx.length === ky.length && kx.every((k) => x[k] === y[k]);
         };
-        const parentProps = parseProps(sm[1]);
-        const midProps = Object.assign({}, parentProps);
-        mutate(midProps);
+        const merged = [];
+        for (const p of pieces) {
+            const last = merged[merged.length - 1];
+            if (last && same(last.props, p.props)) {
+                last.t += p.t;
+                last.inSel = last.inSel || p.inSel;
+            } else {
+                merged.push(p);
+            }
+        }
 
         const styleOf = (p) => Object.entries(p).map(([k, v]) => k + ':' + v).join('; ');
-        const wrap = (t, p) => {
-            if (!t) return '';
-            const s = styleOf(p);
-            return s ? '<span style="' + s + '">' + t + '</span>' : t;
-        };
-        const same = Object.keys(parentProps).length === Object.keys(midProps).length &&
-            Object.keys(parentProps).every((k) => parentProps[k] === midProps[k]);
-
-        const before = text.slice(innerStart, from.ch);
-        const mid = text.slice(from.ch, to.ch);
-        const after = text.slice(to.ch, innerEnd);
-        let out;
-        let midFrom;
-        let midTo;
-        if (same) {
-            // No net change vs the parent (e.g. toggled back): keep one span
-            out = wrap(before + mid + after, parentProps);
-            midFrom = 0;
-            midTo = out.length;
-        } else {
-            const b = wrap(before, parentProps);
-            const mw = wrap(mid, midProps);
-            out = b + mw + wrap(after, parentProps);
-            midFrom = b.length;
-            midTo = b.length + mw.length;
+        let out = '';
+        let selA = -1;
+        let selB = -1;
+        for (const p of merged) {
+            const frag = this.wrapStyled(p.t, styleOf(p.props));
+            if (p.inSel && selA < 0) selA = out.length;
+            out += frag;
+            if (p.inSel) selB = out.length;
         }
-        ed.replaceRange(out, { line: from.line, ch: start }, { line: from.line, ch: end });
-        // Select the middle piece so the next button press keeps working on it
-        ed.setSelection({ line: from.line, ch: start + midFrom }, { line: from.line, ch: start + midTo });
+        if (selA < 0) return false;
+
+        ed.replaceRange(prefix + out + suffix, { line, ch: 0 }, { line, ch: text.length });
+        ed.setSelection(
+            { line, ch: regionStart + selA },
+            { line, ch: regionStart + selB }
+        );
+        this.padDocEnd(ed, line);
         ed.focus();
         return true;
     }
@@ -248,7 +321,7 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
     transformSpan(mutate) {
         const ed = this.getEditor();
         if (!ed) { new Notice('Open a note in editing mode first'); return; }
-        if (this.splitApply(ed, mutate)) return;
+        if (this.styleRange(ed, mutate)) return;
         this.expandToSpan(ed);
         const sel = ed.getSelection();
         if (!sel) { new Notice('Select some text first'); return; }
@@ -302,7 +375,7 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
                 const extra = this.absorbSiblings(ed, styleStr);
                 inner = extra.before + inner + extra.after;
             }
-            out = prefix + '<span style="' + styleStr + '">' + inner + '</span>' + suffix;
+            out = prefix + this.wrapStyled(inner, styleStr) + suffix;
         } else {
             out = prefix + inner + suffix;
         }
@@ -311,6 +384,7 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         ed.replaceSelection(out);
         // Re-select the result so the next button press keeps working on the same text
         ed.setSelection(ed.offsetToPos(start), ed.offsetToPos(start + out.length));
+        this.padDocEnd(ed, ed.offsetToPos(start + out.length).line);
         ed.focus();
     }
 
@@ -420,10 +494,41 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
             return;
         }
 
+        // Iterate bottom-up: aligning an embed inserts lines, which must not
+        // shift the line numbers still to be visited
         const wrapRe = /^<div style="text-align:(left|center|right)">([\s\S]*)<\/div>\s*$/;
-        for (let ln = from.line; ln <= to.line; ln++) {
+        for (let ln = to.line; ln >= from.line; ln--) {
             if (this.tableInfo(ed, ln)) continue; // never wrap table rows in a div
             const text = ed.getLine(ln);
+            // Cursor anywhere inside an existing embed block (including on
+            // the embed line itself): retarget or unwrap that block
+            const blk = this.imageBlock(ed, ln);
+            if (blk) {
+                if (align === 'left') {
+                    ed.replaceRange(blk.embed,
+                        { line: blk.start, ch: 0 },
+                        { line: blk.end, ch: ed.getLine(blk.end).length });
+                } else {
+                    const open = ed.getLine(blk.start);
+                    ed.replaceRange('<div style="text-align:' + align + '">',
+                        { line: blk.start, ch: 0 }, { line: blk.start, ch: open.length });
+                }
+                ln = blk.start;
+                continue;
+            }
+            // An embed alone on its line (e.g. an image): markdown inside a
+            // single-line HTML tag stops rendering, so wrap it as a block
+            // with blank lines instead
+            const em = text.trim().match(/^!\[\[[^\]]*\]\]$/);
+            if (em) {
+                if (align !== 'left') {
+                    ed.replaceRange(
+                        '<div style="text-align:' + align + '">\n\n' + em[0] + '\n\n</div>',
+                        { line: ln, ch: 0 }, { line: ln, ch: text.length }
+                    );
+                }
+                continue;
+            }
             const m = text.match(wrapRe);
             const inner = m ? m[2] : text;
             if (!inner.trim()) continue;
@@ -434,14 +539,33 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
                 ed.replaceRange(out, { line: ln, ch: 0 }, { line: ln, ch: text.length });
             }
         }
+        if (align !== 'left') this.padDocEnd(ed, ed.lineCount() - 1);
         ed.focus();
+    }
+
+    // Detect the 5-line block produced when aligning an embed:
+    // <div style="text-align:X"> / blank / ![[...]] / blank / </div>
+    imageBlock(ed, ln) {
+        const last = ed.lineCount() - 1;
+        for (let s = ln; s >= 0 && s >= ln - 4; s--) {
+            if (!/^<div style="text-align:(?:left|center|right)">$/.test(ed.getLine(s))) continue;
+            if (s + 4 > last || ln > s + 4) return null;
+            if (ed.getLine(s + 1).trim() === '' &&
+                /^!\[\[[^\]]*\]\]$/.test(ed.getLine(s + 2).trim()) &&
+                ed.getLine(s + 3).trim() === '' &&
+                ed.getLine(s + 4).trim() === '</div>') {
+                return { start: s, end: s + 4, embed: ed.getLine(s + 2).trim() };
+            }
+            return null;
+        }
+        return null;
     }
 
     clearFormatting() {
         const ed = this.getEditor();
         if (!ed) { new Notice('Open a note in editing mode first'); return; }
-        // A partial selection inside a span clears just that piece via a split
-        if (this.splitApply(ed, (props) => {
+        // A partial selection inside styled text clears just that stretch
+        if (this.styleRange(ed, (props) => {
             for (const k of Object.keys(props)) delete props[k];
         })) return;
         this.expandToSpan(ed);
