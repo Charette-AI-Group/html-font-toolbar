@@ -101,6 +101,34 @@
     padding: 0 4px;
 }
 
+/* Image embeds aligned via the alias keyword: ![[img.png|center|300]].
+   Obsidian exposes the alias as the alt attribute on both the embed
+   container (Live Preview) and the img itself (Reading mode). */
+.image-embed[alt^="center"],
+.image-embed[alt^="right"] {
+    display: block;
+}
+
+.image-embed[alt^="center"] {
+    text-align: center;
+}
+
+.image-embed[alt^="right"] {
+    text-align: right;
+}
+
+img[alt^="center"] {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+img[alt^="right"] {
+    display: block;
+    margin-left: auto;
+    margin-right: 0;
+}
+
 /* Settings tab: preset rows are name + value + (picker) + delete */
 .hft-setting-row .setting-item-info {
     display: none;

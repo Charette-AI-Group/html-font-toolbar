@@ -500,32 +500,26 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         for (let ln = to.line; ln >= from.line; ln--) {
             if (this.tableInfo(ed, ln)) continue; // never wrap table rows in a div
             const text = ed.getLine(ln);
-            // Cursor anywhere inside an existing embed block (including on
-            // the embed line itself): retarget or unwrap that block
+            // Cursor inside a legacy 5-line embed block (an earlier approach
+            // that Live Preview renders as raw HTML): migrate it to the
+            // alt-keyword form
             const blk = this.imageBlock(ed, ln);
             if (blk) {
-                if (align === 'left') {
-                    ed.replaceRange(blk.embed,
-                        { line: blk.start, ch: 0 },
-                        { line: blk.end, ch: ed.getLine(blk.end).length });
-                } else {
-                    const open = ed.getLine(blk.start);
-                    ed.replaceRange('<div style="text-align:' + align + '">',
-                        { line: blk.start, ch: 0 }, { line: blk.start, ch: open.length });
-                }
+                ed.replaceRange(this.alignEmbed(blk.embed, align),
+                    { line: blk.start, ch: 0 },
+                    { line: blk.end, ch: ed.getLine(blk.end).length });
                 ln = blk.start;
                 continue;
             }
-            // An embed alone on its line (e.g. an image): markdown inside a
-            // single-line HTML tag stops rendering, so wrap it as a block
-            // with blank lines instead
+            // An embed alone on its line (e.g. an image): wrapping it in HTML
+            // stops it rendering, so alignment goes into the embed's alias
+            // (![[img.png|center|300]]) which Obsidian exposes as the image's
+            // alt attribute — the plugin CSS aligns it in both view modes
             const em = text.trim().match(/^!\[\[[^\]]*\]\]$/);
             if (em) {
-                if (align !== 'left') {
-                    ed.replaceRange(
-                        '<div style="text-align:' + align + '">\n\n' + em[0] + '\n\n</div>',
-                        { line: ln, ch: 0 }, { line: ln, ch: text.length }
-                    );
+                const out = this.alignEmbed(em[0], align);
+                if (out !== text) {
+                    ed.replaceRange(out, { line: ln, ch: 0 }, { line: ln, ch: text.length });
                 }
                 continue;
             }
@@ -543,7 +537,20 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         ed.focus();
     }
 
-    // Detect the 5-line block produced when aligning an embed:
+    // Set or clear the alignment keyword in an embed's alias:
+    // ![[img.png|434]] + center -> ![[img.png|center|434]]; 'left' removes it
+    alignEmbed(embedText, align) {
+        const m = embedText.match(/^!\[\[([^\]]*)\]\]$/);
+        if (!m) return embedText;
+        const parts = m[1].split('|');
+        const target = parts.shift();
+        const rest = parts.filter((p) => p !== 'center' && p !== 'right');
+        if (align === 'center' || align === 'right') rest.unshift(align);
+        return '![[' + target + (rest.length ? '|' + rest.join('|') : '') + ']]';
+    }
+
+    // Detect the legacy 5-line block a previous version produced when
+    // aligning an embed:
     // <div style="text-align:X"> / blank / ![[...]] / blank / </div>
     imageBlock(ed, ln) {
         const last = ed.lineCount() - 1;

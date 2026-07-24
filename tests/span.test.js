@@ -247,28 +247,29 @@ test('alignment inside a table edits the delimiter row column', () => {
     assert.equal(ed.getLine(1), ' :---: |---');
 });
 
-test('centering an image embed wraps it as a block with blank lines', () => {
+test('centering an image embed sets the alt keyword and keeps the size', () => {
     const ed = new MockEditor('![[Pasted image.png|434]]', { line: 0, ch: 3 });
     const p = makePlugin(ed);
     p.setAlignment('center');
-    assert.equal(
-        ed.getValue(),
-        '<div style="text-align:center">\n\n![[Pasted image.png|434]]\n\n</div>\n'
-    );
-    // Cursor on the embed line inside the block: left-align unwraps it
-    ed.setCursor({ line: 2, ch: 3 });
+    assert.equal(ed.getValue(), '![[Pasted image.png|center|434]]');
+    p.setAlignment('right');
+    assert.equal(ed.getValue(), '![[Pasted image.png|right|434]]');
     p.setAlignment('left');
-    assert.equal(ed.getValue(), '![[Pasted image.png|434]]\n');
+    assert.equal(ed.getValue(), '![[Pasted image.png|434]]');
 });
 
-test('re-aligning an image block only rewrites the opening div', () => {
+test('centering an embed without a size adds just the keyword', () => {
     const ed = new MockEditor('![[img.png]]', { line: 0, ch: 0 });
     const p = makePlugin(ed);
     p.setAlignment('center');
-    ed.setCursor({ line: 2, ch: 0 });
-    p.setAlignment('right');
-    assert.equal(
-        ed.getValue(),
-        '<div style="text-align:right">\n\n![[img.png]]\n\n</div>\n'
-    );
+    assert.equal(ed.getValue(), '![[img.png|center]]');
+    p.setAlignment('left');
+    assert.equal(ed.getValue(), '![[img.png]]');
+});
+
+test('aligning a legacy embed block migrates it to the keyword form', () => {
+    const block = '<div style="text-align:center">\n\n![[img.png|300]]\n\n</div>';
+    const ed = new MockEditor(block, { line: 2, ch: 0 });
+    makePlugin(ed).setAlignment('right');
+    assert.equal(ed.getValue(), '![[img.png|right|300]]');
 });
