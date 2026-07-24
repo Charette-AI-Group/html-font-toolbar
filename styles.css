@@ -104,22 +104,16 @@
 /* Image embeds aligned via the alias keyword: ![[img.png|center|300]].
    Obsidian exposes the alias as the alt attribute on both the embed
    container (Live Preview) and the img itself (Reading mode). */
-/* Live Preview puts the alt on the embed container, which shrink-wraps
-   to the image: make the container itself block-level and center it.
-   Reading mode puts the alt on the img, handled below. */
-.internal-embed[alt^="center"],
-.internal-embed[alt^="right"] {
-    display: block !important;
-    width: fit-content;
-    margin-left: auto !important;
+/* Live Preview: the embed sits inside inline editor wrappers that
+   shrink-wrap to the image, so styling the embed itself cannot move it.
+   Align the whole editor line that contains it instead. Reading mode
+   puts the alt on the img, handled below. */
+.markdown-source-view .cm-line:has(.internal-embed[alt^="center"]) {
+    text-align: center;
 }
 
-.internal-embed[alt^="center"] {
-    margin-right: auto !important;
-}
-
-.internal-embed[alt^="right"] {
-    margin-right: 0 !important;
+.markdown-source-view .cm-line:has(.internal-embed[alt^="right"]) {
+    text-align: right;
 }
 
 img[alt^="center"] {
