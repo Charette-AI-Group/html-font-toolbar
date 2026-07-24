@@ -102,11 +102,22 @@
 }
 
 /* Image embeds aligned via the alias keyword: ![[img.png|center|300]].
-   Post-1.12.4 DOM: the alt lives on the .image-embed wrapper in Live
-   Preview and on the img in Reading mode (see
-   https://forum.obsidian.md/t/centering-images-in-the-post-1-12-4-era/111877).
-   High-specificity selectors override app and theme styling. */
-.markdown-source-view.mod-cm6 .cm-content .internal-embed.image-embed[alt^="center"],
+   Post-1.12.4, Obsidian's core stylesheet locks embed margins in Live
+   Preview (.cm-content > * sets margin with priority), so the editor
+   rules move the embed with a transform, which that lock does not cover.
+   Reading mode is aligned through plain margins. */
+.markdown-source-view.mod-cm6 .cm-content .internal-embed.image-embed[alt^="center"] {
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.markdown-source-view.mod-cm6 .cm-content .internal-embed.image-embed[alt^="right"] {
+    position: relative;
+    left: 100%;
+    transform: translateX(-100%);
+}
+
 .markdown-rendered .internal-embed.image-embed[alt^="center"],
 .markdown-rendered img[alt^="center"] {
     display: block;
@@ -114,7 +125,6 @@
     margin-right: auto;
 }
 
-.markdown-source-view.mod-cm6 .cm-content .internal-embed.image-embed[alt^="right"],
 .markdown-rendered .internal-embed.image-embed[alt^="right"],
 .markdown-rendered img[alt^="right"] {
     display: block;
