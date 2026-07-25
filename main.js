@@ -1,6 +1,9 @@
 'use strict';
 
-const { Plugin, PluginSettingTab, Setting, Notice, MarkdownView, setIcon, debounce } = require('obsidian');
+const { Plugin, PluginSettingTab, Setting, Modal, Notice, MarkdownView, setIcon, debounce } = require('obsidian');
+
+// How many picks the symbol picker keeps in its Recent row
+const RECENT_MAX = 12;
 
 const DEFAULT_SETTINGS = {
     visible: true,
@@ -38,6 +41,16 @@ const DEFAULT_SETTINGS = {
         { name: 'Mono', value: 'Consolas, monospace' },
         { name: 'Hand', value: "'Segoe Script', 'Comic Sans MS', cursive" },
     ],
+    // Symbol picker groups: characters separated by spaces
+    symbols: [
+        { name: 'Math', value: '± × ÷ ≈ ≠ ≤ ≥ ° ∞ ∑ √ ∫ ∂ ∆ ½ ¼ ¾' },
+        { name: 'Greek', value: 'α β γ δ ε θ λ μ π ρ σ τ φ ψ ω Ω Σ Δ Φ' },
+        { name: 'Arrows', value: '→ ← ↑ ↓ ↔ ⇒ ⇐ ⇔ ↳ ⇧' },
+        { name: 'Punctuation', value: "— – … « » “ ” ‘ ’ † ‡ § ¶ • ·" },
+        { name: 'Currency', value: '€ £ ¥ ¢ ₹ ₽ ¤' },
+        { name: 'Marks', value: '✓ ✗ ★ ☆ ☐ ☑ ♥ ⚠ © ® ™' },
+    ],
+    recentSymbols: [],
 };
 
 // Properties that style text and may be copied onto fragments when a span is
@@ -74,6 +87,11 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
             id: 'toggle-toolbar',
             name: 'Toggle toolbar',
             callback: () => this.toggleToolbar(),
+        });
+        this.addCommand({
+            id: 'insert-symbol',
+            name: 'Insert symbol',
+            editorCallback: () => new SymbolPickerModal(this).open(),
         });
         this.addSettingTab(new HtmlFontToolbarSettingTab(this.app, this));
         // Rebuild is cheap (a few dozen nodes) but debounced so typing in the
@@ -724,6 +742,38 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         ed.focus();
     }
 
+    // ---------- symbol insertion ----------
+
+    // Insert a character at the cursor. No span is created: sitting inside an
+    // existing span, the character lands inside it and inherits its styling.
+    insertSymbol(ch) {
+        const ed = this.getEditor();
+        if (!ed) { new Notice('Open a note in editing mode first'); return; }
+        ed.replaceSelection(ch);
+        ed.focus();
+        this.rememberSymbol(ch);
+    }
+
+    rememberSymbol(ch) {
+        const recent = this.settings.recentSymbols.filter((c) => c !== ch);
+        recent.unshift(ch);
+        this.settings.recentSymbols = recent.slice(0, RECENT_MAX);
+        this.saveSettings();
+    }
+
+    // Recent row first, then the configured groups
+    symbolGroups() {
+        const groups = [];
+        if (this.settings.recentSymbols.length) {
+            groups.push({ name: 'Recent', chars: this.settings.recentSymbols.slice() });
+        }
+        for (const g of this.settings.symbols) {
+            const chars = String(g.value).split(/\s+/).filter(Boolean);
+            if (chars.length) groups.push({ name: g.name, chars });
+        }
+        return groups;
+    }
+
     // ---------- toolbar UI ----------
 
     buildToolbar() {
@@ -831,6 +881,7 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         mkBtn(g, 'Italic', () => this.toggleStyle('font-style', 'italic'), 'hft-i').textContent = 'I';
         mkBtn(g, 'Underline', () => this.toggleDecoration('underline'), 'hft-u').textContent = 'U';
         mkBtn(g, 'Strikethrough', () => this.toggleDecoration('line-through'), 'hft-s').textContent = 'S';
+        mkBtn(g, 'Insert symbol', () => new SymbolPickerModal(this).open(), 'hft-omega').textContent = 'Ω';
 
         // Alignment (whole-line: cursor anywhere in the paragraph is enough)
         g = mkGroup();
@@ -866,6 +917,64 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         if (!this.settings.visible) bar.classList.add('hft-hidden');
     }
 };
+
+// Character picker: a Recent row plus the configured groups, filtered by
+// group name. Clicking a character inserts it at the cursor.
+class SymbolPickerModal extends Modal {
+    constructor(plugin) {
+        super(plugin.app);
+        this.plugin = plugin;
+        this.first = null;
+    }
+
+    onOpen() {
+        this.modalEl.addClass('hft-symbol-modal');
+        this.titleEl.setText('Insert symbol');
+        const search = this.contentEl.createEl('input', {
+            type: 'text',
+            placeholder: 'Filter groups (math, arrows, …)',
+            cls: 'hft-symbol-search',
+        });
+        this.listEl = this.contentEl.createDiv();
+        this.render('');
+        search.addEventListener('input', () => this.render(search.value));
+        search.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && this.first) {
+                e.preventDefault();
+                this.pick(this.first);
+            }
+        });
+        search.focus();
+    }
+
+    onClose() {
+        this.contentEl.empty();
+    }
+
+    pick(ch) {
+        this.plugin.insertSymbol(ch);
+        this.close();
+    }
+
+    render(filter) {
+        this.listEl.empty();
+        this.first = null;
+        const q = filter.trim().toLowerCase();
+        let shown = 0;
+        for (const g of this.plugin.symbolGroups()) {
+            if (q && !g.name.toLowerCase().includes(q)) continue;
+            this.listEl.createDiv({ text: g.name, cls: 'hft-symbol-group' });
+            const grid = this.listEl.createDiv({ cls: 'hft-symbol-grid' });
+            for (const ch of g.chars) {
+                if (!this.first) this.first = ch;
+                const b = grid.createEl('button', { text: ch, cls: 'hft-symbol' });
+                b.addEventListener('click', () => this.pick(ch));
+            }
+            shown++;
+        }
+        if (!shown) this.listEl.createDiv({ text: 'No matching group.', cls: 'hft-symbol-empty' });
+    }
+}
 
 class HtmlFontToolbarSettingTab extends PluginSettingTab {
     constructor(app, plugin) {
@@ -924,6 +1033,24 @@ class HtmlFontToolbarSettingTab extends PluginSettingTab {
             valuePlaceholder: 'Georgia, serif',
             addItem: () => ({ name: 'Font', value: 'Georgia, serif' }),
         });
+
+        this.listSection({
+            key: 'symbols',
+            heading: 'Symbols',
+            desc: 'Groups shown in the symbol picker (the Ω button). Separate the characters with spaces. The picker search matches the group name, so name groups the way you would look for them.',
+            valuePlaceholder: '± × ÷ ≈ °',
+            addItem: () => ({ name: 'Group', value: '★' }),
+        });
+
+        new Setting(containerEl)
+            .setName('Recently used symbols')
+            .setDesc('The picker keeps your last ' + RECENT_MAX + ' picks in a Recent row at the top.')
+            .addButton((b) => b
+                .setButtonText('Clear')
+                .onClick(() => {
+                    this.plugin.settings.recentSymbols = [];
+                    this.save();
+                }));
     }
 
     listSection({ key, heading, desc, picker, valuePlaceholder, addItem }) {

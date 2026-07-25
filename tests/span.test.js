@@ -70,6 +70,13 @@ function makePlugin(ed) {
     return new HtmlFontToolbarPlugin(app, { id: 'html-font-toolbar' });
 }
 
+// Plugin with settings populated from the defaults (as onload would)
+async function makeConfiguredPlugin(ed) {
+    const p = makePlugin(ed);
+    await p.loadSettings();
+    return p;
+}
+
 // Select `target` (first occurrence) on line `line` of the editor
 function select(ed, target, line = 0) {
     const ch = ed.getLine(line).indexOf(target);
@@ -313,6 +320,47 @@ test('paragraph alignment wraps and left-align unwraps', () => {
     assert.equal(ed.getValue(), '<div style="text-align:center">hello</div>\n');
     p.setAlignment('left');
     assert.equal(ed.getValue(), 'hello\n');
+});
+
+test('inserting a symbol places it at the cursor and records it as recent', async () => {
+    const ed = new MockEditor('a b', { line: 0, ch: 2 });
+    const p = await makeConfiguredPlugin(ed);
+    p.insertSymbol('→');
+    assert.equal(ed.getValue(), 'a →b');
+    assert.deepEqual(p.settings.recentSymbols, ['→']);
+});
+
+test('a symbol inserted inside a styled span lands inside it', async () => {
+    const line = '<span style="font-weight:bold">abc</span>';
+    const ed = new MockEditor(line);
+    ed.setSelection({ line: 0, ch: line.indexOf('abc') + 2 });
+    const p = await makeConfiguredPlugin(ed);
+    p.insertSymbol('°');
+    assert.equal(ed.getValue(), '<span style="font-weight:bold">ab°c</span>');
+});
+
+test('recent symbols dedupe, move to front, and cap at the limit', async () => {
+    const ed = new MockEditor('x', { line: 0, ch: 0 });
+    const p = await makeConfiguredPlugin(ed);
+    const picks = '123456789abcde'.split(''); // 14 distinct picks
+    picks.forEach((c) => p.insertSymbol(c));
+    assert.equal(p.settings.recentSymbols.length, 12);
+    assert.equal(p.settings.recentSymbols[0], 'e');
+    assert.ok(!p.settings.recentSymbols.includes('1'));
+    p.insertSymbol('9'); // already present, further down the list
+    assert.equal(p.settings.recentSymbols[0], '9');
+    assert.equal(p.settings.recentSymbols.filter((c) => c === '9').length, 1);
+    assert.equal(p.settings.recentSymbols.length, 12);
+});
+
+test('symbol groups put Recent first and split values on spaces', async () => {
+    const p = await makeConfiguredPlugin(new MockEditor('x', { line: 0, ch: 0 }));
+    assert.equal(p.symbolGroups()[0].name, 'Math'); // no Recent row yet
+    p.insertSymbol('π');
+    const groups = p.symbolGroups();
+    assert.deepEqual(groups[0], { name: 'Recent', chars: ['π'] });
+    assert.ok(groups[1].chars.length > 3);
+    assert.ok(groups.every((g) => g.chars.every((c) => !/\s/.test(c))));
 });
 
 test('indent steps by 2em, repeats deepen, outdent walks back to plain', () => {

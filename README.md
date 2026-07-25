@@ -21,6 +21,7 @@ Because the output is plain inline HTML, notes render identically even if the pl
 - **Text color** — 6 theme-safe presets + a persistent custom color slot with picker
 - **Highlight** — 6 semi-transparent presets that work in light *and* dark themes + custom slot
 - **Bold / Italic / Underline / Strikethrough** — as span styles, so they merge and toggle
+- **Symbol picker** — the Ω button opens a searchable character picker (math, Greek, arrows, punctuation, currency, marks) with a recently-used row. Characters insert at the cursor and inherit whatever styling surrounds them
 - **Font size** — Small to XXL (relative `em` units, scale with your theme)
 - **Font family** — serif / mono / handwriting presets
 - **Alignment (left / center / right)** — context-aware:
@@ -38,7 +39,7 @@ Because the output is plain inline HTML, notes render identically even if the pl
 
 ## Customization
 
-Every preset on the toolbar is editable in the plugin's settings tab: rename, recolor, remove, or add text colors, highlights, font sizes, and fonts. Each section has a one-click restore-defaults button. Changes apply to the toolbar immediately.
+Every preset on the toolbar is editable in the plugin's settings tab: rename, recolor, remove, or add text colors, highlights, font sizes, fonts, and symbol groups. Each section has a one-click restore-defaults button. Changes apply to the toolbar immediately.
 
 Color values accept any CSS color — hex like `#ffd500` or `rgba(255, 213, 0, 0.4)`, where the fourth rgba number is opacity (0 = transparent, 1 = opaque). The two formats are interchangeable: `#ffd500` is `rgba(255, 213, 0, 1)` with the three channels written in hex. As a rule of thumb, use opaque hex for text colors (semi-transparent text looks washed out) and semi-transparent rgba for highlights (so they stay readable in both light and dark themes).
 

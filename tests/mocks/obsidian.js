@@ -35,6 +35,14 @@ class Setting {
 
 class MarkdownView {}
 
+// The picker modal is DOM-driven; tests exercise the plugin methods it calls,
+// so this only needs to exist for `class ... extends Modal` to load.
+class Modal {
+    constructor(app) { this.app = app; }
+    open() {}
+    close() {}
+}
+
 const notices = [];
 class Notice {
     constructor(msg) { notices.push(msg); }
@@ -43,4 +51,4 @@ class Notice {
 function setIcon() {}
 function debounce(fn) { return fn; }
 
-module.exports = { Plugin, PluginSettingTab, Setting, MarkdownView, Notice, setIcon, debounce, __notices: notices };
+module.exports = { Plugin, PluginSettingTab, Setting, Modal, MarkdownView, Notice, setIcon, debounce, __notices: notices };

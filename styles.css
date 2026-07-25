@@ -68,6 +68,7 @@
 }
 
 .hft-b { font-weight: 700; }
+.hft-omega { font-weight: 700; }
 .hft-i { font-style: italic; }
 .hft-u { text-decoration: underline; }
 .hft-s { text-decoration: line-through; }
@@ -130,6 +131,50 @@
     display: block;
     margin-left: auto;
     margin-right: 0;
+}
+
+/* Symbol picker modal */
+.hft-symbol-search {
+    width: 100%;
+    margin-bottom: 12px;
+}
+
+.hft-symbol-group {
+    margin-bottom: 4px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+}
+
+.hft-symbol-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 14px;
+}
+
+.hft-symbol {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    line-height: 1;
+    color: var(--text-normal);
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.hft-symbol:hover {
+    background: var(--background-modifier-hover);
+}
+
+.hft-symbol-empty {
+    color: var(--text-muted);
 }
 
 /* Settings tab: preset rows are name + value + (picker) + delete */
