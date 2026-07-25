@@ -45,7 +45,7 @@ Color values accept any CSS color — hex like `#ffd500` or `rgba(255, 213, 0, 0
 
 ## Installation
 
-**From Obsidian (once accepted in the community directory):** Settings → Community plugins → Browse → "HTML Font Toolbar".
+**From Obsidian (recommended):** Settings → Community plugins → Browse → search for "HTML Font Toolbar" — or open it directly in the [community directory](https://obsidian.md/plugins?id=html-font-toolbar).
 
 **Manual:** download `main.js`, `manifest.json`, `styles.css` from the [latest release](../../releases/latest) into `<vault>/.obsidian/plugins/html-font-toolbar/`, then enable the plugin in Settings → Community plugins.
 
