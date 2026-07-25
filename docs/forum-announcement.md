@@ -24,8 +24,9 @@ One span, never nested. Click inside an already-styled word and press another bu
 
 **Other things it does:**
 
+- Precise partial restyling: select any stretch of an already-styled sentence — even across differently-styled parts — and style just that; spans split and re-merge automatically, and markdown links in the selection keep working
 - Semi-transparent highlight presets that stay readable in both light and dark themes
-- Table-aware alignment: aligns paragraphs, whole markdown table columns (`:---:`), or just a selected fragment inside a cell
+- Table-aware alignment: aligns paragraphs, whole markdown table columns (`:---:`), a selected fragment inside a cell, or image embeds (via the alt keyword) — plus paragraph indent/outdent in 2em steps
 - Every preset is customizable in the settings tab — add, rename, or recolor colors, highlights, sizes, and fonts, with one-click restore of defaults
 - Clear-formatting eraser, ribbon/command/hotkey toggle, and release assets with GitHub artifact attestations
 
