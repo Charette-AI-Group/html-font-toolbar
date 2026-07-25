@@ -28,6 +28,7 @@ Because the output is plain inline HTML, notes render identically even if the pl
   - in a table with just a cursor: sets markdown's native *column* alignment (`:---:`)
   - in a table with a selection: aligns just that fragment inside the cell
   - on an image embed (`![[image.png]]` alone on a line): sets the alignment as an alias keyword (`![[image.png|center|300]]`) that the plugin's CSS aligns in both Live Preview and Reading mode — the image keeps rendering natively
+- **Indent / outdent** — paragraph indentation in 2em steps; press again to deepen, and the outdent button walks it back. Indentation and alignment share a single wrapper, so they combine cleanly
 - **Partial restyling** — select any stretch of an already-styled sentence, even across differently-styled parts, and style (or un-style) exactly that stretch: spans split into clean siblings, still never nested, and re-merge when pieces become identical again
 - **Link-safe** — markdown links and embeds inside a styled selection stay outside the spans, so they keep working as links
 - **Clear formatting** — strips all HTML from the selection; click inside a styled word is enough, or select part of a styled run to clear just that part

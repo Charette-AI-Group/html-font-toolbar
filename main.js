@@ -251,7 +251,7 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         let regionStart = 0;
         let prefix = '';
         let suffix = '';
-        const dm = text.match(/^(<(?:div|p) style="text-align:(?:left|center|right)">)([\s\S]*)(<\/(?:div|p)>)$/i);
+        const dm = text.match(/^(<(?:div|p) style="[^"]*">)([\s\S]*)(<\/(?:div|p)>)$/i);
         if (dm) {
             prefix = dm[1];
             suffix = dm[3];
@@ -413,10 +413,10 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         let inner = sel;
         let prefix = '';
         let suffix = '';
-        // An alignment wrapper (div/p from setAlignment) must stay OUTSIDE the
-        // span: a block tag inside an inline span is invalid HTML and breaks
-        // rendering. Peel it off, style the contents, re-wrap at the end.
-        const dm = inner.match(/^(<(?:div|p) style="text-align:(?:left|center|right)">)([\s\S]*)(<\/(?:div|p)>)$/i);
+        // A paragraph wrapper (div/p from alignment/indentation) must stay
+        // OUTSIDE the span: a block tag inside an inline span is invalid HTML
+        // and breaks rendering. Peel it off, style the contents, re-wrap.
+        const dm = inner.match(/^(<(?:div|p) style="[^"]*">)([\s\S]*)(<\/(?:div|p)>)$/i);
         if (dm) {
             prefix = dm[1];
             inner = dm[2];
@@ -436,10 +436,10 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
             }
             inner = inner.replace(/<\/?span[^>]*>/g, '');
             // Repair legacy span-around-div content: after stripping the span
-            // layers an alignment wrapper may surface — peel it off too so it
+            // layers a paragraph wrapper may surface — peel it off too so it
             // gets rebuilt on the outside
             if (!prefix) {
-                const dm2 = inner.match(/^(<(?:div|p) style="text-align:(?:left|center|right)">)([\s\S]*)(<\/(?:div|p)>)$/i);
+                const dm2 = inner.match(/^(<(?:div|p) style="[^"]*">)([\s\S]*)(<\/(?:div|p)>)$/i);
                 if (dm2) {
                     prefix = dm2[1];
                     inner = dm2[2];
@@ -580,7 +580,6 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
 
         // Iterate bottom-up: aligning an embed inserts lines, which must not
         // shift the line numbers still to be visited
-        const wrapRe = /^<div style="text-align:(left|center|right)">([\s\S]*)<\/div>\s*$/;
         for (let ln = to.line; ln >= from.line; ln--) {
             if (this.tableInfo(ed, ln)) continue; // never wrap table rows in a div
             const text = ed.getLine(ln);
@@ -607,17 +606,73 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
                 }
                 continue;
             }
-            const m = text.match(wrapRe);
+            // Set/clear text-align on the paragraph wrapper, preserving any
+            // other paragraph props it carries (e.g. margin-left indentation)
+            const m = text.match(/^<(?:div|p) style="([^"]*)">([\s\S]*)<\/(?:div|p)>\s*$/);
+            const props = m ? this.parseStyleProps(m[1]) : {};
             const inner = m ? m[2] : text;
             if (!inner.trim()) continue;
-            const out = align === 'left'
-                ? inner
-                : '<div style="text-align:' + align + '">' + inner + '</div>';
+            if (align === 'left') delete props['text-align'];
+            else props['text-align'] = align;
+            const styleStr = Object.entries(props).map(([k, v]) => k + ':' + v).join('; ');
+            const out = styleStr ? '<div style="' + styleStr + '">' + inner + '</div>' : inner;
             if (out !== text) {
                 ed.replaceRange(out, { line: ln, ch: 0 }, { line: ln, ch: text.length });
             }
         }
         if (align !== 'left') this.padDocEnd(ed, ed.lineCount() - 1);
+        ed.focus();
+    }
+
+    // Indent/outdent the paragraph(s) in 2em steps via margin-left on the
+    // wrapper. A whole-line layout span (e.g. hand-written
+    // <span style="display:block; margin-left:2em">) is adjusted in place
+    // instead of being wrapped in another block.
+    setIndent(delta) {
+        const ed = this.getEditor();
+        if (!ed) { new Notice('Open a note in editing mode first'); return; }
+        const from = ed.getCursor('from');
+        const to = ed.getCursor('to');
+        if (from.line === to.line && this.tableInfo(ed, from.line)) {
+            new Notice('Indentation is not available inside tables');
+            return;
+        }
+        const styleOf = (p) => Object.entries(p).map(([k, v]) => k + ':' + v).join('; ');
+        for (let ln = to.line; ln >= from.line; ln--) {
+            if (this.tableInfo(ed, ln)) continue;
+            const text = ed.getLine(ln);
+            if (!text.trim() || /^!\[\[[^\]]*\]\]$/.test(text.trim())) continue;
+            const m = text.match(/^<(?:div|p) style="([^"]*)">([\s\S]*)<\/(?:div|p)>\s*$/);
+            let props;
+            let rebuild;
+            if (m) {
+                props = this.parseStyleProps(m[1]);
+                const inner = m[2];
+                if (!inner.trim()) continue;
+                rebuild = (s) => (s ? '<div style="' + s + '">' + inner + '</div>' : inner);
+            } else {
+                const runs = this.parseRuns(text);
+                const r = runs && runs.length === 1 && runs[0].span &&
+                    runs[0].start === 0 && runs[0].end === text.length ? runs[0] : null;
+                if (r && Object.keys(this.partitionProps(r.props).layout).length) {
+                    props = r.props;
+                    const inner = text.slice(r.innerStart, r.innerEnd);
+                    rebuild = (s) => (s ? '<span style="' + s + '">' + inner + '</span>' : inner);
+                } else {
+                    props = {};
+                    rebuild = (s) => (s ? '<div style="' + s + '">' + text + '</div>' : text);
+                }
+            }
+            const cur = parseFloat(props['margin-left']) || 0;
+            const next = cur + delta * 2;
+            if (next <= 0) delete props['margin-left'];
+            else props['margin-left'] = next + 'em';
+            const out = rebuild(styleOf(props));
+            if (out !== text) {
+                ed.replaceRange(out, { line: ln, ch: 0 }, { line: ln, ch: text.length });
+            }
+        }
+        if (delta > 0) this.padDocEnd(ed, ed.lineCount() - 1);
         ed.focus();
     }
 
@@ -782,6 +837,8 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         setIcon(mkBtn(g, 'Align left (removes alignment)', () => this.setAlignment('left')), 'align-left');
         setIcon(mkBtn(g, 'Align center', () => this.setAlignment('center')), 'align-center');
         setIcon(mkBtn(g, 'Align right', () => this.setAlignment('right')), 'align-right');
+        setIcon(mkBtn(g, 'Decrease indent', () => this.setIndent(-1)), 'indent-decrease');
+        setIcon(mkBtn(g, 'Increase indent (press again to deepen)', () => this.setIndent(1)), 'indent-increase');
 
         // Size + font dropdowns
         g = mkGroup();

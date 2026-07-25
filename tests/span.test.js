@@ -315,6 +315,50 @@ test('paragraph alignment wraps and left-align unwraps', () => {
     assert.equal(ed.getValue(), 'hello\n');
 });
 
+test('indent steps by 2em, repeats deepen, outdent walks back to plain', () => {
+    const ed = new MockEditor('hello', { line: 0, ch: 2 });
+    const p = makePlugin(ed);
+    p.setIndent(1);
+    assert.equal(ed.getValue(), '<div style="margin-left:2em">hello</div>\n');
+    p.setIndent(1);
+    assert.equal(ed.getValue(), '<div style="margin-left:4em">hello</div>\n');
+    p.setIndent(-1);
+    assert.equal(ed.getValue(), '<div style="margin-left:2em">hello</div>\n');
+    p.setIndent(-1);
+    assert.equal(ed.getValue(), 'hello\n');
+});
+
+test('indentation and alignment share one wrapper and preserve each other', () => {
+    const ed = new MockEditor('hello', { line: 0, ch: 2 });
+    const p = makePlugin(ed);
+    p.setAlignment('center');
+    p.setIndent(1);
+    assert.equal(ed.getValue(), '<div style="text-align:center; margin-left:2em">hello</div>\n');
+    p.setAlignment('left');
+    assert.equal(ed.getValue(), '<div style="margin-left:2em">hello</div>\n');
+});
+
+test('indenting a whole-line layout span adjusts its own margin', () => {
+    const line = '<span style="display:block; margin-left:2em">some text</span>';
+    const ed = new MockEditor(line, { line: 0, ch: 5 });
+    makePlugin(ed).setIndent(1);
+    assert.equal(
+        ed.getValue(),
+        '<span style="display:block; margin-left:4em">some text</span>\n'
+    );
+});
+
+test('styling a word inside an indented line keeps the wrapper outside', () => {
+    const line = '<div style="margin-left:2em">hello world</div>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 });
+    select(ed, 'world');
+    makePlugin(ed).toggleStyle('font-weight', 'bold');
+    assert.equal(
+        ed.getValue(),
+        '<div style="margin-left:2em">hello <span style="font-weight:bold">world</span></div>\n'
+    );
+});
+
 test('alignment inside a table edits the delimiter row column', () => {
     const ed = new MockEditor('a|b\n---|---\n1|2', { line: 0, ch: 0 });
     makePlugin(ed).setAlignment('center');
