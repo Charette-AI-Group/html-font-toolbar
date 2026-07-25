@@ -13,7 +13,7 @@ HTML Font Toolbar — Word-like formatting that stays one clean HTML span
 
 Hi everyone! I'd like to share my first Obsidian plugin: **HTML Font Toolbar**, a floating formatting toolbar for text colors, highlights, font sizes, font families, bold/italic/underline/strikethrough, and alignment.
 
-![The floating toolbar over a note](https://raw.githubusercontent.com/Charette-AI-Group/html-font-toolbar/main/docs/toolbarOn.png)
+![The floating toolbar over a note](https://raw.githubusercontent.com/Charette-AI-Group/html-font-toolbar/main/docs/toolbarOn%28rel1_7_6%29.png)
 
 **What makes it different from other formatting plugins?** Everything it produces is *one clean inline HTML span*. Markdown formatting and HTML styling don't nest predictably — mix a highlight plugin with a color plugin and you get conflicting wrappers. This plugin stays in one layer instead:
 
@@ -30,7 +30,7 @@ One span, never nested. Click inside an already-styled word and press another bu
 - Every preset is customizable in the settings tab — add, rename, or recolor colors, highlights, sizes, and fonts, with one-click restore of defaults
 - Clear-formatting eraser, ribbon/command/hotkey toggle, and release assets with GitHub artifact attestations
 
-![The settings tab with editable presets](https://raw.githubusercontent.com/Charette-AI-Group/html-font-toolbar/main/docs/toolbarSettings.png)
+![The settings tab with editable presets](https://raw.githubusercontent.com/Charette-AI-Group/html-font-toolbar/main/docs/toolbarSettings%28rel1_7_6%29.png)
 
 **Install:** search for "HTML Font Toolbar" in Settings → Community plugins → Browse (desktop only for now), or grab it from the [GitHub releases](https://github.com/Charette-AI-Group/html-font-toolbar/releases/latest).
 
