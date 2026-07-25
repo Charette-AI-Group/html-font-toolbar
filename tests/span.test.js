@@ -195,6 +195,58 @@ test('no padding is added when styled text is not at the document end', () => {
     assert.equal(ed.getValue(), 'hello <span style="font-weight:bold">world</span>\nsecond');
 });
 
+test('layout-carrying span stays one wrapper when a word inside is styled', () => {
+    const line =
+        '<span style="margin-left:2em; font-weight:bold; text-decoration:underline">Implications:</span>' +
+        '<span style="display:block; margin-left:2em">Which corresponds to the Oneness all leaders lead to!</span>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 });
+    select(ed, 'Oneness');
+    makePlugin(ed).toggleStyle('font-weight', 'bold');
+    assert.equal(
+        ed.getValue(),
+        '<span style="margin-left:2em; font-weight:bold; text-decoration:underline">Implications:</span>' +
+        '<span style="display:block; margin-left:2em">Which corresponds to the ' +
+        '<span style="font-weight:bold">Oneness</span> all leaders lead to!</span>\n'
+    );
+    assert.equal(ed.getSelection(), '<span style="font-weight:bold">Oneness</span>');
+});
+
+test('splitting a mixed layout+inline span pushes inline styles down', () => {
+    const line = '<span style="margin-left:2em; font-weight:bold">Hello world</span>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 });
+    select(ed, 'world');
+    makePlugin(ed).toggleStyle('font-style', 'italic');
+    assert.equal(
+        ed.getValue(),
+        '<span style="margin-left:2em"><span style="font-weight:bold">Hello </span>' +
+        '<span style="font-weight:bold; font-style:italic">world</span></span>\n'
+    );
+});
+
+test('toggling back inside a wrapper re-merges its inner spans', () => {
+    const line = '<span style="margin-left:2em; font-weight:bold">Hello world</span>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 });
+    select(ed, 'world');
+    const p = makePlugin(ed);
+    p.toggleStyle('font-style', 'italic');
+    p.toggleStyle('font-style', 'italic'); // inner span is still selected
+    assert.equal(
+        ed.getValue(),
+        '<span style="margin-left:2em"><span style="font-weight:bold">Hello world</span></span>\n'
+    );
+});
+
+test('cursor click inside a layout span styles content, keeps the wrapper', () => {
+    const line = '<span style="display:block">hello</span>';
+    const ed = new MockEditor(line);
+    ed.setSelection({ line: 0, ch: line.indexOf('hello') + 2 });
+    makePlugin(ed).applyStyle('color', '#e0313a');
+    assert.equal(
+        ed.getValue(),
+        '<span style="display:block"><span style="color:#e0313a">hello</span></span>\n'
+    );
+});
+
 test('styling a fully selected aligned line keeps the div outside the span', () => {
     const line = '<div style="text-align:center">hello</div>';
     const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });

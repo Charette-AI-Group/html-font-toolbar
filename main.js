@@ -40,6 +40,16 @@ const DEFAULT_SETTINGS = {
     ],
 };
 
+// Properties that style text and may be copied onto fragments when a span is
+// split. Anything else (display, margins, padding, ...) lays out the span as
+// a container and must stay on a single wrapper, never be duplicated.
+const INLINE_PROPS = new Set([
+    'color', 'background-color', 'font-weight', 'font-style', 'font-size',
+    'font-family', 'font-variant', 'text-decoration', 'text-decoration-line',
+    'text-decoration-style', 'text-decoration-color', 'text-transform',
+    'letter-spacing', 'word-spacing', 'vertical-align', 'opacity', 'text-shadow',
+]);
+
 // Parse #rgb / #rrggbb / rgb() / rgba() into { hex, alpha } so the settings
 // color picker (hex-only) can preview and edit semi-transparent values.
 function parseCssColor(value) {
@@ -169,9 +179,19 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         return p;
     }
 
-    // Tokenize a stretch of text into runs: plain text and top-level flat
-    // spans. Returns null when the markup is nested or unbalanced, so callers
-    // fall back to the whole-span repair path.
+    partitionProps(props) {
+        const layout = {};
+        const inline = {};
+        for (const [k, v] of Object.entries(props)) {
+            (INLINE_PROPS.has(k) ? inline : layout)[k] = v;
+        }
+        return { layout, inline };
+    }
+
+    // Tokenize a stretch of text into runs: plain text and top-level spans.
+    // Span runs carry their children as recursively parsed runs of the inner
+    // text. Returns null when the markup is unbalanced or a span has
+    // unexpected attributes, so callers fall back to the repair path.
     parseRuns(text) {
         const runs = [];
         const tok = /<span\b[^>]*>|<\/span>/g;
@@ -182,31 +202,37 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         let plain = 0;
         while ((m = tok.exec(text)) !== null) {
             if (m[0][1] === '/') {
+                if (depth === 0) return null;
                 depth--;
-                if (depth < 0) return null;
                 if (depth === 0) {
                     const sm = openTag.match(/^<span style="([^"]*)">$/i);
                     if (!sm) return null;
+                    const innerStart = spanStart + openTag.length;
+                    const innerEnd = m.index;
+                    const children = this.parseRuns(text.slice(innerStart, innerEnd));
+                    if (!children) return null;
                     runs.push({
                         span: true,
                         start: spanStart,
                         end: m.index + m[0].length,
-                        innerStart: spanStart + openTag.length,
-                        innerEnd: m.index,
+                        innerStart,
+                        innerEnd,
                         props: this.parseStyleProps(sm[1]),
+                        children,
                     });
                     plain = m.index + m[0].length;
                 }
             } else {
-                if (depth > 0) return null; // nested spans: repair path instead
-                if (m.index > plain) runs.push({ span: false, start: plain, end: m.index, props: {} });
-                spanStart = m.index;
-                openTag = m[0];
+                if (depth === 0) {
+                    if (m.index > plain) runs.push({ span: false, start: plain, end: m.index });
+                    spanStart = m.index;
+                    openTag = m[0];
+                }
                 depth++;
             }
         }
         if (depth !== 0) return null;
-        if (text.length > plain) runs.push({ span: false, start: plain, end: text.length, props: {} });
+        if (text.length > plain) runs.push({ span: false, start: plain, end: text.length });
         return runs;
     }
 
@@ -239,51 +265,106 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         const b = Math.min(to.ch - regionStart, region.length);
         if (a >= b) return false;
 
-        // Cut every run into outside/inside pieces relative to the selection
-        const pieces = [];
-        const push = (t, props, inSel) => { if (t) pieces.push({ t, props, inSel }); };
-        for (const r of runs) {
-            const cs = r.span ? r.innerStart : r.start;
-            const ce = r.span ? r.innerEnd : r.end;
+        const hasKeys = (o) => Object.keys(o).length > 0;
+        const styleOf = (p) => Object.entries(p).map(([k, v]) => k + ':' + v).join('; ');
+        // Cut the content range [cs,ce) into outside/inside pieces relative
+        // to the selection; inside pieces get `mutate` applied to their props
+        const cut = (cs, ce, base) => {
             const s = Math.min(Math.max(a, cs), ce);
             const e = Math.max(Math.min(b, ce), cs);
+            const list = [];
+            const push = (t, props, inSel) => { if (t) list.push({ t, props, inSel }); };
             if (s >= e) {
-                push(region.slice(cs, ce), Object.assign({}, r.props), false);
-                continue;
+                push(region.slice(cs, ce), Object.assign({}, base), false);
+                return list;
             }
-            push(region.slice(cs, s), Object.assign({}, r.props), false);
-            const mp = Object.assign({}, r.props);
+            push(region.slice(cs, s), Object.assign({}, base), false);
+            const mp = Object.assign({}, base);
             mutate(mp);
             push(region.slice(s, e), mp, true);
-            push(region.slice(e, ce), Object.assign({}, r.props), false);
-        }
-
-        // Re-merge neighbors that ended up with identical styles
+            push(region.slice(e, ce), Object.assign({}, base), false);
+            return list;
+        };
         const same = (x, y) => {
             const kx = Object.keys(x);
             const ky = Object.keys(y);
             return kx.length === ky.length && kx.every((k) => x[k] === y[k]);
         };
-        const merged = [];
-        for (const p of pieces) {
-            const last = merged[merged.length - 1];
-            if (last && same(last.props, p.props)) {
-                last.t += p.t;
-                last.inSel = last.inSel || p.inSel;
-            } else {
-                merged.push(p);
+        const mergeAdj = (list) => {
+            const acc = [];
+            for (const p of list) {
+                const last = acc[acc.length - 1];
+                if (last && same(last.props, p.props)) {
+                    last.t += p.t;
+                    last.inSel = last.inSel || p.inSel;
+                } else {
+                    acc.push(p);
+                }
             }
+            return acc;
+        };
+
+        // Assemble segments: contiguous piece streams (merge across run
+        // boundaries), untouched layout wrappers kept verbatim, and rebuilt
+        // layout wrappers whose inline styling is pushed down to fragments
+        const segs = [];
+        const addPieces = (list) => {
+            const lastSeg = segs[segs.length - 1];
+            if (lastSeg && lastSeg.type === 'pieces') lastSeg.list.push(...list);
+            else segs.push({ type: 'pieces', list });
+        };
+        for (const r of runs) {
+            if (!r.span) {
+                addPieces(cut(r.start, r.end, {}));
+                continue;
+            }
+            const parts = this.partitionProps(r.props);
+            const childSpans = r.children.filter((c) => c.span);
+            if (!hasKeys(parts.layout)) {
+                if (childSpans.length) return false; // nested, no layout: repair path
+                addPieces(cut(r.innerStart, r.innerEnd, parts.inline));
+                continue;
+            }
+            // A span with layout properties is a container: splitting it into
+            // siblings would duplicate its layout (one block per fragment).
+            // Keep it as a single wrapper and restyle inside it instead.
+            for (const c of childSpans) {
+                if (c.children.some((g) => g.span)) return false;
+                if (hasKeys(this.partitionProps(c.props).layout)) return false;
+            }
+            if (b <= r.innerStart || a >= r.innerEnd) {
+                segs.push({ type: 'raw', text: region.slice(r.start, r.end) });
+                continue;
+            }
+            const wlist = [];
+            for (const c of r.children) {
+                const base = c.span ? Object.assign({}, parts.inline, this.partitionProps(c.props).inline) : parts.inline;
+                const cs = r.innerStart + (c.span ? c.innerStart : c.start);
+                const ce = r.innerStart + (c.span ? c.innerEnd : c.end);
+                wlist.push(...cut(cs, ce, base));
+            }
+            segs.push({
+                type: 'wrap',
+                open: '<span style="' + styleOf(parts.layout) + '">',
+                list: mergeAdj(wlist),
+            });
         }
 
-        const styleOf = (p) => Object.entries(p).map(([k, v]) => k + ':' + v).join('; ');
         let out = '';
         let selA = -1;
         let selB = -1;
-        for (const p of merged) {
-            const frag = this.wrapStyled(p.t, styleOf(p.props));
-            if (p.inSel && selA < 0) selA = out.length;
-            out += frag;
-            if (p.inSel) selB = out.length;
+        const emit = (list) => {
+            for (const p of list) {
+                const frag = this.wrapStyled(p.t, styleOf(p.props));
+                if (p.inSel && selA < 0) selA = out.length;
+                out += frag;
+                if (p.inSel) selB = out.length;
+            }
+        };
+        for (const seg of segs) {
+            if (seg.type === 'raw') { out += seg.text; continue; }
+            if (seg.type === 'wrap') { out += seg.open; emit(seg.list); out += '</span>'; continue; }
+            emit(mergeAdj(seg.list));
         }
         if (selA < 0) return false;
 
@@ -323,6 +404,9 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         if (!ed) { new Notice('Open a note in editing mode first'); return; }
         if (this.styleRange(ed, mutate)) return;
         this.expandToSpan(ed);
+        // A cursor click expands to the whole span; run the range engine on
+        // that selection too, so layout-carrying spans keep their wrapper
+        if (this.styleRange(ed, mutate)) return;
         const sel = ed.getSelection();
         if (!sel) { new Notice('Select some text first'); return; }
 
