@@ -111,9 +111,11 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         return view ? view.editor : null;
     }
 
-    // If the selection (or just the cursor) sits inside an existing span whose markup
-    // is hidden by Live Preview, grow the selection to cover the whole span so we
-    // merge into it instead of nesting a new one. Handles nested spans via depth count.
+    // If the selection (or just the cursor) sits inside an existing span whose
+    // markup is hidden by Live Preview, grow the selection to cover the whole
+    // span so we merge into it instead of nesting a new one. Picks the
+    // INNERMOST containing span: inside a layout wrapper, a click on a styled
+    // word must target that word's span, not the whole wrapper.
     expandToSpan(ed) {
         const from = ed.getCursor('from');
         const to = ed.getCursor('to');
@@ -121,24 +123,22 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         const text = ed.getLine(from.line);
         const tok = /<span\b[^>]*>|<\/span>/g;
         let m;
-        let depth = 0;
-        let start = -1;
+        const stack = [];
+        let best = null;
         while ((m = tok.exec(text)) !== null) {
             if (m[0][1] === '/') {
-                depth--;
-                if (depth === 0 && start >= 0) {
-                    const end = m.index + m[0].length;
-                    if (from.ch >= start && to.ch <= end) {
-                        ed.setSelection({ line: from.line, ch: start }, { line: from.line, ch: end });
-                        return;
-                    }
-                    start = -1;
+                const start = stack.pop();
+                if (start === undefined) continue;
+                const end = m.index + m[0].length;
+                if (from.ch >= start && to.ch <= end) {
+                    if (!best || end - start < best.end - best.start) best = { start, end };
                 }
-                if (depth < 0) depth = 0;
             } else {
-                if (depth === 0) start = m.index;
-                depth++;
+                stack.push(m.index);
             }
+        }
+        if (best) {
+            ed.setSelection({ line: from.line, ch: best.start }, { line: from.line, ch: best.end });
         }
     }
 

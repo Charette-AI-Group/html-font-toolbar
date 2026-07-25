@@ -236,6 +236,28 @@ test('toggling back inside a wrapper re-merges its inner spans', () => {
     );
 });
 
+test('cursor click on a styled word inside a wrapper restyles only that word', () => {
+    const line =
+        '<span style="display:block; margin-left:2em">Which corresponds to the ' +
+        '<span style="font-weight:bold">Oneness</span> all leaders lead to!</span>';
+    const ed = new MockEditor(line);
+    ed.setSelection({ line: 0, ch: line.indexOf('Oneness') + 3 });
+    const p = makePlugin(ed);
+    p.applyStyle('color', '#e0313a');
+    assert.equal(
+        ed.getValue(),
+        '<span style="display:block; margin-left:2em">Which corresponds to the ' +
+        '<span style="font-weight:bold; color:#e0313a">Oneness</span> all leaders lead to!</span>\n'
+    );
+    // And again: underline just that word via another cursor-based action
+    p.toggleDecoration('underline');
+    assert.equal(
+        ed.getValue(),
+        '<span style="display:block; margin-left:2em">Which corresponds to the ' +
+        '<span style="font-weight:bold; color:#e0313a; text-decoration:underline">Oneness</span> all leaders lead to!</span>\n'
+    );
+});
+
 test('cursor click inside a layout span styles content, keeps the wrapper', () => {
     const line = '<span style="display:block">hello</span>';
     const ed = new MockEditor(line);
