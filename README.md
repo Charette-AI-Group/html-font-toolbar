@@ -31,7 +31,7 @@ Because the output is plain inline HTML, notes render identically even if the pl
 - **Partial restyling** — select any stretch of an already-styled sentence, even across differently-styled parts, and style (or un-style) exactly that stretch: spans split into clean siblings, still never nested, and re-merge when pieces become identical again
 - **Link-safe** — markdown links and embeds inside a styled selection stay outside the spans, so they keep working as links
 - **Clear formatting** — strips all HTML from the selection; click inside a styled word is enough, or select part of a styled run to clear just that part
-- **Cursor-friendly** — after the first styling, clicking anywhere inside a styled word is enough to restyle it; no re-selecting
+- **Cursor-friendly** — after the first styling, clicking anywhere inside styled text is enough to restyle it; no re-selecting. A click targets the innermost styled unit under the cursor, an explicit selection targets exactly the selected stretch (see Usage)
 - **Fully customizable** — a settings tab lets you add, rename, recolor, or remove every preset (text colors, highlights, sizes, fonts), with one-click restore of the defaults
 - Toolbar toggles via ribbon icon, command palette, or assignable hotkey; groups wrap responsively without splitting
 
@@ -57,6 +57,12 @@ Color values accept any CSS color — hex like `#ffd500` or `rgba(255, 213, 0, 0
 2. Select text (or click inside an already-styled word) and press a button.
 3. Stack as many properties as you like — they merge into a single span.
 4. The eraser button removes all styling from the selection or the styled word under the cursor.
+
+### Selection vs. cursor click — what gets styled?
+
+- **Highlight a selection** to style exactly that stretch and nothing more. This works inside an already-styled sentence (the span splits around your selection), and even across differently-styled parts — each part keeps its other styles.
+- **Just click, no selection** to restyle an existing styled unit as a whole. The button applies to the innermost styled span under the cursor: clicking a styled word targets that word; clicking in the body of a fully-styled sentence targets the whole sentence. So if a click styles more than you intended, make an explicit selection instead — selection always wins on precision.
+- Plain, never-styled text always needs a selection — with only a cursor there is nothing to expand to.
 
 ## Support
 
