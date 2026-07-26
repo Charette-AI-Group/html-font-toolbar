@@ -13,7 +13,7 @@ HTML Font Toolbar — Word-like formatting that stays one clean HTML span
 
 Hi everyone! I'd like to share my first Obsidian plugin: **HTML Font Toolbar**, a floating formatting toolbar for text colors, highlights, font sizes, font families, bold/italic/underline/strikethrough, and alignment.
 
-![The floating toolbar over a note](https://raw.githubusercontent.com/Charette-AI-Group/html-font-toolbar/main/docs/toolbarOn%28rel1_7_6%29.png)
+![The floating toolbar over a note](https://raw.githubusercontent.com/Charette-AI-Group/html-font-toolbar/main/docs/toolbarOn.png)
 
 **What makes it different from other formatting plugins?** Everything it produces is *one clean inline HTML span*. Markdown formatting and HTML styling don't nest predictably — mix a highlight plugin with a color plugin and you get conflicting wrappers. This plugin stays in one layer instead:
 
@@ -27,10 +27,12 @@ One span, never nested. Click inside an already-styled word and press another bu
 - Precise partial restyling: select any stretch of an already-styled sentence — even across differently-styled parts — and style just that; spans split and re-merge automatically, and markdown links in the selection keep working
 - Semi-transparent highlight presets that stay readable in both light and dark themes
 - Table-aware alignment: aligns paragraphs, whole markdown table columns (`:---:`), a selected fragment inside a cell, or image embeds (via the alt keyword) — plus paragraph indent/outdent in 2em steps
-- Every preset is customizable in the settings tab — add, rename, or recolor colors, highlights, sizes, and fonts, with one-click restore of defaults
+- A symbol picker (Ω) with searchable groups — math, Greek, arrows, punctuation, currency, marks — and a recently-used row; characters insert at the cursor and inherit the styling around them
+- Every button toggles: press the color, highlight, or B/I/U/S you already have to remove just that property
+- Every preset is customizable in the settings tab — add, rename, or recolor colors, highlights, sizes, fonts, and symbol groups, with one-click restore of defaults
 - Clear-formatting eraser, ribbon/command/hotkey toggle, and release assets with GitHub artifact attestations
 
-![The settings tab with editable presets](https://raw.githubusercontent.com/Charette-AI-Group/html-font-toolbar/main/docs/toolbarSettings%28rel1_7_6%29.png)
+![The settings tab with editable presets](https://raw.githubusercontent.com/Charette-AI-Group/html-font-toolbar/main/docs/toolbarSettings.png)
 
 **Install:** search for "HTML Font Toolbar" in Settings → Community plugins → Browse (desktop only for now), or grab it from the [GitHub releases](https://github.com/Charette-AI-Group/html-font-toolbar/releases/latest).
 
