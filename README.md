@@ -18,8 +18,8 @@ Because the output is plain inline HTML, notes render identically even if the pl
 
 ## Features
 
-- **Text color** — 6 theme-safe presets + a persistent custom color slot with picker
-- **Highlight** — 6 semi-transparent presets that work in light *and* dark themes + custom slot
+- **Text color** — 6 theme-safe presets + a persistent custom color slot with picker; click the same color again to remove it
+- **Highlight** — 6 semi-transparent presets that work in light *and* dark themes + custom slot; click the same highlight again to remove it
 - **Bold / Italic / Underline / Strikethrough** — as span styles, so they merge and toggle
 - **Symbol picker** — the Ω button opens a searchable character picker (math, Greek, arrows, punctuation, currency, marks) with a recently-used row. Characters insert at the cursor and inherit whatever styling surrounds them
 - **Font size** — Small to XXL (relative `em` units, scale with your theme)
@@ -58,7 +58,8 @@ Color values accept any CSS color — hex like `#ffd500` or `rgba(255, 213, 0, 0
    ![The palette icon in the left ribbon toggles the toolbar](docs/toolbarOff.png)
 2. Select text (or click inside an already-styled word) and press a button.
 3. Stack as many properties as you like — they merge into a single span.
-4. The eraser button removes all styling from the selection or the styled word under the cursor.
+4. Every styling button toggles: pressing the color, highlight, or B/I/U/S you already have removes just that one property and leaves the rest intact. Pressing a *different* color replaces the current one.
+5. The eraser button removes all styling at once from the selection or the styled word under the cursor.
 
 ### Selection vs. cursor click — what gets styled?
 

@@ -117,6 +117,35 @@ test('toggling a style on and off restores the original text', () => {
     assert.equal(ed.getValue(), 'hello world\n');
 });
 
+test('clicking the same color again removes it and keeps other styles', () => {
+    const line = '<span style="font-weight:bold; color:#e0313a">word</span>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
+    makePlugin(ed).toggleStyle('color', '#e0313a');
+    assert.equal(ed.getValue(), '<span style="font-weight:bold">word</span>\n');
+});
+
+test('clicking a different color replaces rather than removes', () => {
+    const line = '<span style="color:#e0313a">word</span>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
+    makePlugin(ed).toggleStyle('color', '#1c7ed6');
+    assert.equal(ed.getValue(), '<span style="color:#1c7ed6">word</span>\n');
+});
+
+test('clicking the same highlight again removes just the highlight', () => {
+    const hl = 'rgba(255, 213, 0, 0.4)';
+    const line = '<span style="color:#e0313a; background-color:' + hl + '">word</span>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
+    makePlugin(ed).toggleStyle('background-color', hl);
+    assert.equal(ed.getValue(), '<span style="color:#e0313a">word</span>\n');
+});
+
+test('removing the only color leaves plain text', () => {
+    const line = '<span style="color:#e0313a">word</span>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
+    makePlugin(ed).toggleStyle('color', '#e0313a');
+    assert.equal(ed.getValue(), 'word');
+});
+
 test('repairs nested spans into one flat span (inner wins)', () => {
     const line = '<span style="color:red"><span style="font-weight:bold">x</span></span>';
     const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });

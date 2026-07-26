@@ -808,8 +808,8 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
             const key = isText ? 'customText' : 'customHighlight';
             const apply = mkBtn(
                 group,
-                (isText ? 'Custom text color' : 'Custom highlight') + ' (▾ to change it)',
-                () => this.applyStyle(prop, this.settings[key]),
+                (isText ? 'Custom text color' : 'Custom highlight') + ' (click again to remove, ▾ to change it)',
+                () => this.toggleStyle(prop, this.settings[key]),
                 isText ? 'hft-a' : 'hft-swatch'
             );
             const paint = () => {
@@ -861,7 +861,7 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         // Text colors
         let g = mkGroup();
         for (const { name, value } of this.settings.textColors) {
-            const b = mkBtn(g, 'Text color: ' + name, () => this.applyStyle('color', value), 'hft-a');
+            const b = mkBtn(g, 'Text color: ' + name + ' (click again to remove)', () => this.toggleStyle('color', value), 'hft-a');
             b.textContent = 'A';
             b.style.color = value;
         }
@@ -870,7 +870,7 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         // Highlights
         g = mkGroup();
         for (const { name, value } of this.settings.highlights) {
-            const b = mkBtn(g, 'Highlight: ' + name, () => this.applyStyle('background-color', value), 'hft-swatch');
+            const b = mkBtn(g, 'Highlight: ' + name + ' (click again to remove)', () => this.toggleStyle('background-color', value), 'hft-swatch');
             b.style.backgroundColor = value;
         }
         mkCustomColor(g, 'background-color');
