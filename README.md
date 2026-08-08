@@ -4,6 +4,18 @@ An Obsidian plugin that gives you a floating, Word-like formatting toolbar — b
 
 ![The floating toolbar over a note, with color, highlight, style, symbol, alignment, indentation, size, and font controls](docs/toolbarOn.png)
 
+## Sister plugins
+
+**HTML Font Toolbar** and **[HTML Table Toolbar](https://github.com/Charette-AI-Group/html-table-toolbar)** are sister plugins, built by the same author to the same house style and designed to work side by side. Neither depends on the other and neither imports the other's code — **install either one alone and it works completely.**
+
+Install both and they coexist deliberately rather than by accident:
+
+- **They stack instead of overlapping.** The table strip measures this toolbar and sits above it, reacting the moment this one is enabled, disabled, hidden, shown or re-wrapped by a narrower window. Nothing needs configuring.
+- **They divide the work cleanly.** Font formatting is universal, so this toolbar is always available — including inside table cells, where bolding a header row is a frequent need. Table controls are contextual and only act when the cursor is in an HTML table.
+- **They never fight over CSS.** Every class here is namespaced `hft-`, every class there is `tt-`.
+
+Where this plugin styles text, the table plugin builds real `<table>` markup — merged cells, per-cell shading, per-row and per-column borders, and table centring, none of which Markdown pipe tables can do.
+
 ## Why another formatting plugin?
 
 Markdown formatting (`**bold**`, `==highlight==`) and HTML styling (`<span style="color:red">`) don't nest predictably. Mix plugins that use different syntaxes and you get conflicts: a highlight that locks the font color, bold that can't be colored, nested tags that break each other.
