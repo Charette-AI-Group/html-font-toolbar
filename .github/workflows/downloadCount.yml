@@ -1,0 +1,45 @@
+name: Download count
+
+# Keeps stats/downloads.json in step with the plugin's community directory
+# page, so the catalog at charette-ai-group.github.io/web can show a current
+# number. Obsidian's own community-plugin-stats.json trails that page by a day
+# or two; see scripts/updateDownloadCount.js for the measurements.
+
+on:
+  schedule:
+    - cron: "20 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: downloadCount
+  cancel-in-progress: false
+
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Throws rather than writing a number it cannot verify, so a change to
+      # the directory's markup fails this run instead of publishing nonsense.
+      - name: Read the count from the community directory
+        run: node scripts/updateDownloadCount.js
+
+      - name: Commit it when it changed
+        run: |
+          if [ -z "$(git status --porcelain -- stats/downloads.json)" ]; then
+            echo "No change."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add stats/downloads.json
+          git commit -m "Update download count"
+          git push
