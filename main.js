@@ -275,8 +275,17 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
 
     // Build the open/close tags for a paragraph wrapper from a prop set
     // (text-align, margin-left, ...). Always a span with display:block first
-    // — never a div/p, which would stop Obsidian's markdown parser (including
-    // links) from running on the paragraph. Null when there is nothing to wrap.
+    // — never a div/p, which would make Obsidian treat the whole paragraph as
+    // a raw HTML block and stop parsing the markdown inside it in BOTH views.
+    //
+    // Note the span still does not rescue Live Preview: LP renders inline HTML
+    // or parses markdown, never both, so a [[link]] inside any wrapper reads as
+    // raw text while editing and renders correctly in Reading view. That is an
+    // Obsidian limitation with no plugin-side fix (forum topics 62707, 29589) —
+    // changing the tag does not help, so do not "fix" it that way again. It is
+    // documented under Known limitations in the README.
+    //
+    // Null when there is nothing to wrap.
     buildParaWrapper(props) {
         const keys = Object.keys(props).filter((k) => k !== 'display');
         if (!keys.length) return null;

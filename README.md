@@ -36,14 +36,14 @@ Because the output is plain inline HTML, notes render identically even if the pl
 - **Symbol picker** — the Ω button opens a searchable character picker (math, Greek, arrows, punctuation, currency, marks) with a recently-used row. Characters insert at the cursor and inherit whatever styling surrounds them
 - **Font size** — Small to XXL (relative `em` units, scale with your theme)
 - **Font family** — serif / mono / handwriting presets
-- **Alignment (left / center / right)** — built as `<span style="display:block">`, never `<div>`/`<p>`: those stop Obsidian from parsing any markdown inside them, including links, so a centered line with a `[[wikilink]]` would render as plain text. Old notes migrate automatically the next time you align, indent, or style something inside them. Context-aware:
+- **Alignment (left / center / right)** — wrapped in a `<span style="display:block">` rather than a `<div>`/`<p>`, which would make Obsidian treat the whole paragraph as raw HTML (lines wrapped by older versions migrate automatically the next time you touch them). Context-aware:
   - in a paragraph: aligns the paragraph
   - in a table with just a cursor: sets markdown's native *column* alignment (`:---:`)
   - in a table with a selection: aligns just that fragment inside the cell
   - on an image embed (`![[image.png]]` alone on a line): sets the alignment as an alias keyword (`![[image.png|center|300]]`) that the plugin's CSS aligns in both Live Preview and Reading mode — the image keeps rendering natively
 - **Indent / outdent** — paragraph indentation in 2em steps; press again to deepen, and the outdent button walks it back. Indentation and alignment share a single wrapper, so they combine cleanly
 - **Partial restyling** — select any stretch of an already-styled sentence, even across differently-styled parts, and style (or un-style) exactly that stretch: spans split into clean siblings, still never nested, and re-merge when pieces become identical again
-- **Link-safe** — markdown links and embeds inside a styled selection stay outside the spans, and alignment/indentation never use a block tag that would stop them from being parsed, so links keep working as links
+- **Link-safe styling** — markdown links and embeds inside a styled selection are emitted *outside* the spans, so they keep working as links (whole-line alignment can't do this — see [Known limitations](#known-limitations))
 - **Clear formatting** — strips all HTML from the selection; click inside a styled word is enough, or select part of a styled run to clear just that part
 - **Cursor-friendly** — after the first styling, clicking anywhere inside styled text is enough to restyle it; no re-selecting. A click targets the innermost styled unit under the cursor, an explicit selection targets exactly the selected stretch (see Usage)
 - **Fully customizable** — a settings tab lets you add, rename, recolor, or remove every preset (text colors, highlights, sizes, fonts), with one-click restore of the defaults
@@ -78,6 +78,13 @@ Color values accept any CSS color — hex like `#ffd500` or `rgba(255, 213, 0, 0
 - **Highlight a selection** to style exactly that stretch and nothing more. This works inside an already-styled sentence (the span splits around your selection), and even across differently-styled parts — each part keeps its other styles.
 - **Just click, no selection** to restyle an existing styled unit as a whole. The button applies to the innermost styled span under the cursor: clicking a styled word targets that word; clicking in the body of a fully-styled sentence targets the whole sentence. So if a click styles more than you intended, make an explicit selection instead — selection always wins on precision.
 - Plain, never-styled text always needs a selection — with only a cursor there is nothing to expand to.
+
+## Known limitations
+
+Both of these come from Obsidian itself rather than the plugin, and neither has a workaround available to a plugin:
+
+- **Editing view does not render markdown inside inline HTML.** Live Preview renders inline HTML *or* parses markdown, never both — a long-standing Obsidian limitation ([Live Preview: Support inline HTML elements](https://forum.obsidian.md/t/live-preview-support-inline-html-elements-like-span/62707), [links inside `<u>`](https://forum.obsidian.md/t/live-preview-doesnt-render-internal-links-inside-u/29589)). In practice: if you center or indent a line containing a `[[wikilink]]`, that link shows as raw text while you are in **Editing view**, and renders correctly in **Reading view**. The same applies to markdown syntax such as `**bold**` typed inside a styled span. No choice of wrapper tag avoids it — the wrapping itself is what disables the parser. It is also why styling a *selection* deliberately emits links outside the spans, which is possible for inline styling but not for whole-line alignment, where the wrapper has to enclose the entire line.
+- **Image alignment depends on the plugin's CSS.** Aligning an image embed writes an alias keyword (`![[image.png|center|300]]`) that the plugin's stylesheet acts on, because wrapping an embed in HTML stops it rendering at all. If you uninstall the plugin, those images revert to left alignment. Everything else the plugin produces is plain inline HTML and keeps rendering without it.
 
 ## Support
 
