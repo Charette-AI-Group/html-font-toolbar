@@ -305,50 +305,88 @@ test('cursor click inside a layout span styles content, keeps the wrapper', () =
     );
 });
 
-test('styling a fully selected aligned line keeps the div outside the span', () => {
+test('styling a fully selected aligned line keeps the wrapper outside the span', () => {
+    const line = '<span style="display:block; text-align:center">hello</span>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
+    makePlugin(ed).applyStyle('background-color', 'rgba(255, 213, 0, 0.4)');
+    assert.equal(
+        ed.getValue(),
+        '<span style="display:block; text-align:center">' +
+        '<span style="background-color:rgba(255, 213, 0, 0.4)">hello</span></span>\n'
+    );
+});
+
+test('styling an aligned styled line merges into the span inside the wrapper', () => {
+    const line = '<span style="display:block; text-align:center"><span style="font-weight:bold">hello</span></span>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
+    makePlugin(ed).applyStyle('color', '#e0313a');
+    assert.equal(
+        ed.getValue(),
+        '<span style="display:block; text-align:center"><span style="font-weight:bold; color:#e0313a">hello</span></span>\n'
+    );
+});
+
+test('toggling the only style off an aligned line restores the bare wrapper', () => {
+    const line = '<span style="display:block; text-align:center"><span style="font-weight:bold">hello</span></span>';
+    const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
+    makePlugin(ed).toggleStyle('font-weight', 'bold');
+    assert.equal(ed.getValue(), '<span style="display:block; text-align:center">hello</span>\n');
+});
+
+test('restyling a legacy div-wrapped aligned line migrates it to a span', () => {
+    // A div (or p) starting a line makes Obsidian treat the whole paragraph
+    // as raw HTML, so links/embeds inside it stop being parsed — span does
+    // not, so touching an old div-wrapped line upgrades it.
     const line = '<div style="text-align:center">hello</div>';
     const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
     makePlugin(ed).applyStyle('background-color', 'rgba(255, 213, 0, 0.4)');
     assert.equal(
         ed.getValue(),
-        '<div style="text-align:center"><span style="background-color:rgba(255, 213, 0, 0.4)">hello</span></div>\n'
+        '<span style="display:block; text-align:center">' +
+        '<span style="background-color:rgba(255, 213, 0, 0.4)">hello</span></span>\n'
     );
 });
 
-test('styling an aligned styled line merges into the span inside the div', () => {
-    const line = '<div style="text-align:center"><span style="font-weight:bold">hello</span></div>';
-    const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
-    makePlugin(ed).applyStyle('color', '#e0313a');
-    assert.equal(
-        ed.getValue(),
-        '<div style="text-align:center"><span style="font-weight:bold; color:#e0313a">hello</span></div>\n'
-    );
-});
-
-test('toggling the only style off an aligned line restores the bare div', () => {
-    const line = '<div style="text-align:center"><span style="font-weight:bold">hello</span></div>';
-    const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
-    makePlugin(ed).toggleStyle('font-weight', 'bold');
-    assert.equal(ed.getValue(), '<div style="text-align:center">hello</div>\n');
-});
-
-test('restyling legacy span-around-div content repairs the tag order', () => {
+test('restyling legacy span-around-div content repairs the tag order into a span wrapper', () => {
     const line = '<span style="font-weight:bold"><div style="text-align:center">hello</div></span>';
     const ed = new MockEditor(line, { line: 0, ch: 0 }, { line: 0, ch: line.length });
     makePlugin(ed).applyStyle('color', '#e0313a');
     assert.equal(
         ed.getValue(),
-        '<div style="text-align:center"><span style="font-weight:bold; color:#e0313a">hello</span></div>\n'
+        '<span style="display:block; text-align:center"><span style="font-weight:bold; color:#e0313a">hello</span></span>\n'
     );
 });
 
-test('paragraph alignment wraps and left-align unwraps', () => {
+test('paragraph alignment wraps in a span (not a div) and left-align unwraps', () => {
     const ed = new MockEditor('hello', { line: 0, ch: 2 });
     const p = makePlugin(ed);
     p.setAlignment('center');
-    assert.equal(ed.getValue(), '<div style="text-align:center">hello</div>\n');
+    assert.equal(ed.getValue(), '<span style="display:block; text-align:center">hello</span>\n');
     p.setAlignment('left');
     assert.equal(ed.getValue(), 'hello\n');
+});
+
+test('a link inside an aligned line survives centering', () => {
+    // Obsidian only parses [[wikilinks]] inside a normal paragraph; a line
+    // starting with <div> becomes a raw HTML block and the link renders as
+    // plain text instead. Using <span display:block> avoids that.
+    const line = 'see [[Note|Alias]] here';
+    const ed = new MockEditor(line, { line: 0, ch: 2 });
+    makePlugin(ed).setAlignment('center');
+    assert.equal(
+        ed.getValue(),
+        '<span style="display:block; text-align:center">see [[Note|Alias]] here</span>\n'
+    );
+});
+
+test('aligning a legacy div-wrapped line migrates it to a span', () => {
+    const line = '<div style="margin-left:2em">hello</div>';
+    const ed = new MockEditor(line, { line: 0, ch: 2 });
+    makePlugin(ed).setAlignment('right');
+    assert.equal(
+        ed.getValue(),
+        '<span style="display:block; margin-left:2em; text-align:right">hello</span>\n'
+    );
 });
 
 test('inserting a symbol places it at the cursor and records it as recent', async () => {
@@ -396,11 +434,11 @@ test('indent steps by 2em, repeats deepen, outdent walks back to plain', () => {
     const ed = new MockEditor('hello', { line: 0, ch: 2 });
     const p = makePlugin(ed);
     p.setIndent(1);
-    assert.equal(ed.getValue(), '<div style="margin-left:2em">hello</div>\n');
+    assert.equal(ed.getValue(), '<span style="display:block; margin-left:2em">hello</span>\n');
     p.setIndent(1);
-    assert.equal(ed.getValue(), '<div style="margin-left:4em">hello</div>\n');
+    assert.equal(ed.getValue(), '<span style="display:block; margin-left:4em">hello</span>\n');
     p.setIndent(-1);
-    assert.equal(ed.getValue(), '<div style="margin-left:2em">hello</div>\n');
+    assert.equal(ed.getValue(), '<span style="display:block; margin-left:2em">hello</span>\n');
     p.setIndent(-1);
     assert.equal(ed.getValue(), 'hello\n');
 });
@@ -410,9 +448,19 @@ test('indentation and alignment share one wrapper and preserve each other', () =
     const p = makePlugin(ed);
     p.setAlignment('center');
     p.setIndent(1);
-    assert.equal(ed.getValue(), '<div style="text-align:center; margin-left:2em">hello</div>\n');
+    assert.equal(ed.getValue(), '<span style="display:block; text-align:center; margin-left:2em">hello</span>\n');
     p.setAlignment('left');
-    assert.equal(ed.getValue(), '<div style="margin-left:2em">hello</div>\n');
+    assert.equal(ed.getValue(), '<span style="display:block; margin-left:2em">hello</span>\n');
+});
+
+test('indenting a legacy div-wrapped line migrates it to a span', () => {
+    const line = '<div style="text-align:center">hello</div>';
+    const ed = new MockEditor(line, { line: 0, ch: 2 });
+    makePlugin(ed).setIndent(1);
+    assert.equal(
+        ed.getValue(),
+        '<span style="display:block; text-align:center; margin-left:2em">hello</span>\n'
+    );
 });
 
 test('indenting a whole-line layout span adjusts its own margin', () => {
@@ -440,6 +488,17 @@ test('alignment inside a table edits the delimiter row column', () => {
     const ed = new MockEditor('a|b\n---|---\n1|2', { line: 0, ch: 0 });
     makePlugin(ed).setAlignment('center');
     assert.equal(ed.getLine(1), ' :---: |---');
+});
+
+test('aligning a selected fragment in a table cell uses a span, not p/div', () => {
+    // A div/p wrapper landing at column 0 (e.g. the first cell, no leading
+    // pipe) would turn the row into a raw HTML block; span does not.
+    const ed = new MockEditor('a|b\n---|---\n1|2', { line: 0, ch: 0 }, { line: 0, ch: 1 });
+    const p = makePlugin(ed);
+    p.setAlignment('center');
+    assert.equal(ed.getLine(0), '<span style="display:block; text-align:center">a</span>|b');
+    p.setAlignment('left');
+    assert.equal(ed.getLine(0), 'a|b');
 });
 
 test('centering an image embed sets the alt keyword and keeps the size', () => {

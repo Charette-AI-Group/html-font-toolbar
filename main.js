@@ -254,6 +254,38 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         return runs;
     }
 
+    // Detect a whole-line paragraph wrapper (from alignment/indentation):
+    // either the current span+display:block form, or a legacy div/p form
+    // kept so old notes migrate to the span form on touch. A div or p as the
+    // very first thing on a line makes Obsidian treat the whole paragraph as
+    // raw HTML, so links and embeds inside it stop being parsed — span does
+    // not, since it isn't a block-level tag. Uses parseRuns (not a regex)
+    // to find the span case, so sibling spans are never mistaken for a wrapper.
+    parseParaWrapper(text) {
+        const legacy = text.match(/^<(?:div|p) style="([^"]*)">([\s\S]*)<\/(?:div|p)>\s*$/i);
+        if (legacy) return { props: this.parseStyleProps(legacy[1]), inner: legacy[2] };
+        const runs = this.parseRuns(text);
+        if (runs && runs.length === 1 && runs[0].span &&
+            runs[0].start === 0 && runs[0].end === text.length &&
+            'display' in runs[0].props) {
+            return { props: runs[0].props, inner: text.slice(runs[0].innerStart, runs[0].innerEnd) };
+        }
+        return null;
+    }
+
+    // Build the open/close tags for a paragraph wrapper from a prop set
+    // (text-align, margin-left, ...). Always a span with display:block first
+    // — never a div/p, which would stop Obsidian's markdown parser (including
+    // links) from running on the paragraph. Null when there is nothing to wrap.
+    buildParaWrapper(props) {
+        const keys = Object.keys(props).filter((k) => k !== 'display');
+        if (!keys.length) return null;
+        const ordered = { display: 'block' };
+        for (const k of keys) ordered[k] = props[k];
+        const styleStr = Object.entries(ordered).map(([k, v]) => k + ':' + v).join('; ');
+        return { open: '<span style="' + styleStr + '">', close: '</span>' };
+    }
+
     // Apply `mutate` to exactly the selected stretch of a line, preserving the
     // distinct styles of every span it touches. Handles selections inside a
     // span, across span boundaries, and over plain text in one pass, emitting
@@ -269,13 +301,21 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         let regionStart = 0;
         let prefix = '';
         let suffix = '';
-        const dm = text.match(/^(<(?:div|p) style="[^"]*">)([\s\S]*)(<\/(?:div|p)>)$/i);
-        if (dm) {
-            prefix = dm[1];
-            suffix = dm[3];
-            regionStart = prefix.length;
+        let region = text;
+        // Legacy div/p paragraph wrapper: rebuild it as a span on touch (see
+        // parseParaWrapper) instead of reusing the div/p verbatim. A span
+        // wrapper needs no peeling here — the run parser below already
+        // recognizes it as a layout-carrying span and keeps it as a wrapper.
+        const legacy = text.match(/^<(?:div|p) style="([^"]*)">([\s\S]*)<\/(?:div|p)>\s*$/i);
+        if (legacy) {
+            const built = this.buildParaWrapper(this.parseStyleProps(legacy[1]));
+            region = legacy[2];
+            if (built) {
+                prefix = built.open;
+                suffix = built.close;
+                regionStart = prefix.length;
+            }
         }
-        const region = dm ? dm[2] : text;
         if (/<(?:div|p)\b/i.test(region)) return false; // block tags inside: repair path
         const runs = this.parseRuns(region);
         if (!runs) return false;
@@ -433,12 +473,16 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         let suffix = '';
         // A paragraph wrapper (div/p from alignment/indentation) must stay
         // OUTSIDE the span: a block tag inside an inline span is invalid HTML
-        // and breaks rendering. Peel it off, style the contents, re-wrap.
-        const dm = inner.match(/^(<(?:div|p) style="[^"]*">)([\s\S]*)(<\/(?:div|p)>)$/i);
+        // and breaks rendering. Peel it off, style the contents, re-wrap —
+        // rebuilding it as a span (see parseParaWrapper) migrates old notes.
+        const dm = inner.match(/^<(?:div|p) style="([^"]*)">([\s\S]*)<\/(?:div|p)>$/i);
         if (dm) {
-            prefix = dm[1];
+            const built = this.buildParaWrapper(this.parseStyleProps(dm[1]));
             inner = dm[2];
-            suffix = dm[3];
+            if (built) {
+                prefix = built.open;
+                suffix = built.close;
+            }
         }
         const props = {};
         // Collect properties from EVERY span layer in the selection (inner layers win),
@@ -457,11 +501,14 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
             // layers a paragraph wrapper may surface — peel it off too so it
             // gets rebuilt on the outside
             if (!prefix) {
-                const dm2 = inner.match(/^(<(?:div|p) style="[^"]*">)([\s\S]*)(<\/(?:div|p)>)$/i);
+                const dm2 = inner.match(/^<(?:div|p) style="([^"]*)">([\s\S]*)<\/(?:div|p)>$/i);
                 if (dm2) {
-                    prefix = dm2[1];
+                    const built2 = this.buildParaWrapper(this.parseStyleProps(dm2[1]));
                     inner = dm2[2];
-                    suffix = dm2[3];
+                    if (built2) {
+                        prefix = built2.open;
+                        suffix = built2.close;
+                    }
                 }
             }
         }
@@ -578,14 +625,17 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
         if (table) {
             const sel = ed.getSelection();
             if (sel && from.line === to.line) {
-                // A selection inside a cell: align just that piece with an HTML
-                // block (tables have no per-cell alignment, but HTML inside a
-                // cell renders fine). 'left' unwraps.
-                const m = sel.match(/^<(?:p|div)[^>]*text-align[^>]*>([\s\S]*)<\/(?:p|div)>$/);
+                // A selection inside a cell: align just that piece (tables have
+                // no per-cell alignment, but HTML inside a cell renders fine).
+                // A span, not div/p: in the first cell of a table with no
+                // leading pipe, the wrapper could land at column 0, which
+                // would make Obsidian treat the row as raw HTML — div/p do
+                // that, span does not. 'left' unwraps.
+                const m = sel.match(/^<(?:span|p|div)[^>]*text-align[^>]*>([\s\S]*)<\/(?:span|p|div)>$/);
                 const inner = m ? m[1] : sel;
                 const out = align === 'left'
                     ? inner
-                    : '<p style="text-align:' + align + '">' + inner + '</p>';
+                    : '<span style="display:block; text-align:' + align + '">' + inner + '</span>';
                 const start = ed.posToOffset(from);
                 ed.replaceSelection(out);
                 ed.setSelection(ed.offsetToPos(start), ed.offsetToPos(start + out.length));
@@ -625,15 +675,17 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
                 continue;
             }
             // Set/clear text-align on the paragraph wrapper, preserving any
-            // other paragraph props it carries (e.g. margin-left indentation)
-            const m = text.match(/^<(?:div|p) style="([^"]*)">([\s\S]*)<\/(?:div|p)>\s*$/);
-            const props = m ? this.parseStyleProps(m[1]) : {};
-            const inner = m ? m[2] : text;
+            // other paragraph props it carries (e.g. margin-left indentation).
+            // The wrapper is always rebuilt as a span (see buildParaWrapper),
+            // migrating any legacy div/p wrapper found on the line.
+            const wrap = this.parseParaWrapper(text);
+            const props = wrap ? Object.assign({}, wrap.props) : {};
+            const inner = wrap ? wrap.inner : text;
             if (!inner.trim()) continue;
             if (align === 'left') delete props['text-align'];
             else props['text-align'] = align;
-            const styleStr = Object.entries(props).map(([k, v]) => k + ':' + v).join('; ');
-            const out = styleStr ? '<div style="' + styleStr + '">' + inner + '</div>' : inner;
+            const built = this.buildParaWrapper(props);
+            const out = built ? built.open + inner + built.close : inner;
             if (out !== text) {
                 ed.replaceRange(out, { line: ln, ch: 0 }, { line: ln, ch: text.length });
             }
@@ -643,9 +695,7 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
     }
 
     // Indent/outdent the paragraph(s) in 2em steps via margin-left on the
-    // wrapper. A whole-line layout span (e.g. hand-written
-    // <span style="display:block; margin-left:2em">) is adjusted in place
-    // instead of being wrapped in another block.
+    // wrapper, migrating any legacy div/p wrapper found on the line.
     setIndent(delta) {
         const ed = this.getEditor();
         if (!ed) { new Notice('Open a note in editing mode first'); return; }
@@ -655,37 +705,20 @@ module.exports = class HtmlFontToolbarPlugin extends Plugin {
             new Notice('Indentation is not available inside tables');
             return;
         }
-        const styleOf = (p) => Object.entries(p).map(([k, v]) => k + ':' + v).join('; ');
         for (let ln = to.line; ln >= from.line; ln--) {
             if (this.tableInfo(ed, ln)) continue;
             const text = ed.getLine(ln);
             if (!text.trim() || /^!\[\[[^\]]*\]\]$/.test(text.trim())) continue;
-            const m = text.match(/^<(?:div|p) style="([^"]*)">([\s\S]*)<\/(?:div|p)>\s*$/);
-            let props;
-            let rebuild;
-            if (m) {
-                props = this.parseStyleProps(m[1]);
-                const inner = m[2];
-                if (!inner.trim()) continue;
-                rebuild = (s) => (s ? '<div style="' + s + '">' + inner + '</div>' : inner);
-            } else {
-                const runs = this.parseRuns(text);
-                const r = runs && runs.length === 1 && runs[0].span &&
-                    runs[0].start === 0 && runs[0].end === text.length ? runs[0] : null;
-                if (r && Object.keys(this.partitionProps(r.props).layout).length) {
-                    props = r.props;
-                    const inner = text.slice(r.innerStart, r.innerEnd);
-                    rebuild = (s) => (s ? '<span style="' + s + '">' + inner + '</span>' : inner);
-                } else {
-                    props = {};
-                    rebuild = (s) => (s ? '<div style="' + s + '">' + text + '</div>' : text);
-                }
-            }
+            const wrap = this.parseParaWrapper(text);
+            const props = wrap ? Object.assign({}, wrap.props) : {};
+            const inner = wrap ? wrap.inner : text;
+            if (!inner.trim()) continue;
             const cur = parseFloat(props['margin-left']) || 0;
             const next = cur + delta * 2;
             if (next <= 0) delete props['margin-left'];
             else props['margin-left'] = next + 'em';
-            const out = rebuild(styleOf(props));
+            const built = this.buildParaWrapper(props);
+            const out = built ? built.open + inner + built.close : inner;
             if (out !== text) {
                 ed.replaceRange(out, { line: ln, ch: 0 }, { line: ln, ch: text.length });
             }
