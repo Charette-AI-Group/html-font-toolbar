@@ -1,9 +1,13 @@
 name: Download count
 
-# Keeps stats/downloads.json in step with the plugin's community directory
-# page, so the catalog at charette-ai-group.github.io/web can show a current
-# number. Obsidian's own community-plugin-stats.json trails that page by a day
-# or two; see scripts/updateDownloadCount.js for the measurements.
+# Keeps stats/downloads.json in step with Obsidian's published statistics, so
+# the catalog at charette-ai-group.github.io/web can show this plugin's total
+# without pulling their 2 MB file on every visit.
+#
+# This used to read the plugin's community directory page, which was fresher
+# at the time. It is not a safe source: it froze for weeks at a stale value
+# while reporting success, then began rounding to "1k" once the count passed a
+# thousand. See scripts/updateDownloadCount.js.
 
 on:
   schedule:
@@ -27,9 +31,9 @@ jobs:
         with:
           node-version: 24
 
-      # Throws rather than writing a number it cannot verify, so a change to
-      # the directory's markup fails this run instead of publishing nonsense.
-      - name: Read the count from the community directory
+      # Throws rather than writing a number it cannot verify, so a bad read
+      # fails this run instead of publishing nonsense.
+      - name: Read the published count
         run: node scripts/updateDownloadCount.js
 
       - name: Commit it when it changed

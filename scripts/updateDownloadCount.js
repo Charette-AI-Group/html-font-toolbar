@@ -1,29 +1,32 @@
 /*
- * Records this plugin's download count, so a page elsewhere can show a number
- * that matches the community directory.
+ * Records this plugin's download count, so a page elsewhere can show it
+ * without pulling a 2 MB file on every visit.
  *
- * Obsidian publishes community-plugin-stats.json in the obsidian-releases
- * repo, but that file trails the figure on the plugin's own directory page.
- * Measured on 2026-08-11, the file said 342 while the directory said 393, and
- * it had not moved at all over the previous day. The directory page carries
- * the current number in its server-rendered HTML, and a workflow may read it
- * because CORS restricts browsers, not servers.
+ * The number comes from community-plugin-stats.json in obsidian-releases,
+ * which Obsidian rewrites daily just after 00:15 UTC. It is the exact figure,
+ * and it trails Obsidian's own counter by a day or two.
  *
- * Writes stats/downloads.json, and only when the number actually changed, so
- * this does not add a commit a day. Run daily by
- * .github/workflows/downloadCount.yml, or by hand:
+ * This script used to read the plugin's community directory page instead,
+ * because that page was fresher: on 2026-08-11 it showed 393 while the file
+ * said 342. That stopped working the moment the count passed a thousand - the
+ * page now renders "1k", and would go on saying "1k" until it reached 2k. A
+ * rounded current number is worth less than an exact stale one, so the file
+ * won. The guard caught it rather than writing 1, which is the whole reason
+ * this script refuses to parse anything it is unsure of.
+ *
+ * Writes stats/downloads.json, and only when the number changed, so this does
+ * not add a commit a day. Run daily by .github/workflows/downloadCount.yml,
+ * or by hand:
  *
  *   node scripts/updateDownloadCount.js
- *
- * It is deliberately noisy. Scraping a page nobody promised to keep stable is
- * the price of a current number, so every check that fails throws instead of
- * writing a value it is not sure of: a broken read stops the workflow rather
- * than quietly publishing a wrong count.
  */
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
+
+const STATS_URL =
+  'https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugin-stats.json';
 
 const root = path.join(__dirname, '..');
 const outputFile = path.join(root, 'stats', 'downloads.json');
@@ -44,37 +47,23 @@ function previousCount() {
   }
 }
 
-function extractCount(html) {
-  // The figure sits just before the word "downloads" in the rendered banner:
-  //   </svg>393<!-- -->&nbsp;downloads</span>
-  // The comment is React's marker between adjacent text nodes and the space is
-  // a non-breaking one, so both are normalised away before matching rather
-  // than written into the pattern.
-  const text = html.replace(/<!-- -->/g, '').replace(/&nbsp;| /g, ' ');
-  const matches = [...text.matchAll(/([\d,]+)\s*downloads/gi)]
-    .map((match) => Number(match[1].replace(/,/g, '')))
-    .filter((value) => Number.isInteger(value));
-
-  if (matches.length === 0) {
-    throw new Error('no "<number> downloads" on the page - its markup has changed');
-  }
-  const distinct = [...new Set(matches)];
-  if (distinct.length > 1) {
-    throw new Error(`the page offers several download counts (${distinct.join(', ')})`);
-  }
-  return distinct[0];
-}
-
 async function main() {
   const plugin = pluginId();
-  const source = `https://community.obsidian.md/plugins/${plugin}`;
 
-  const response = await fetch(source, { headers: { Accept: 'text/html' } });
+  const response = await fetch(STATS_URL, { headers: { Accept: 'application/json' } });
   if (!response.ok) {
-    throw new Error(`${source} returned ${response.status}`);
+    throw new Error(`stats file returned ${response.status}`);
   }
 
-  const downloads = extractCount(await response.text());
+  const entry = (await response.json())[plugin];
+  if (!entry) {
+    throw new Error(`${plugin} is not listed in the stats file`);
+  }
+  const downloads = entry.downloads;
+  if (!Number.isInteger(downloads) || downloads < 0) {
+    throw new Error(`${plugin} has no usable download count (${JSON.stringify(downloads)})`);
+  }
+
   const previous = previousCount();
 
   // Downloads only ever accumulate, so a fall means the number was misread.
@@ -91,7 +80,7 @@ async function main() {
   fs.writeFileSync(
     outputFile,
     JSON.stringify(
-      { plugin, downloads, updated: new Date().toISOString(), source },
+      { plugin, downloads, updated: new Date().toISOString(), source: STATS_URL },
       null,
       2
     ) + '\n'
