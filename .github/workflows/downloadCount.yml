@@ -46,4 +46,21 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add stats/downloads.json
           git commit -m "Update download count"
-          git push
+          # A push can fail for reasons that have nothing to do with this
+          # workflow: GitHub's own git servers occasionally reject one with an
+          # internal error ("fatal error in commit_refs" on 2026-11-10, while
+          # the sister plugin's identical run succeeded three minutes later),
+          # and someone may push to main while this runs. Either way, catch up
+          # with main and try again before giving up.
+          for attempt in 1 2 3; do
+            if git push; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Push attempt $attempt failed; retrying."
+              sleep $((attempt * 10))
+              git pull --rebase
+            fi
+          done
+          echo "Push still failing after 3 attempts."
+          exit 1
